@@ -155,9 +155,9 @@ const MODEL_BASE = '../models/';
   // Hopf fibration: circles over latitude rings of S², stereographically projected from S³
   function hopf(radius) {
     const grp = new THREE.Group();
-    const lats = [0.2, 0.45, 0.65, 0.82];
+    const lats = [0.5, 0.72, 0.88];
     lats.forEach((c, li) => {
-      const n = 14 + li * 2;
+      const n = 9 + li * 3;
       for (let k = 0; k < n; k++) {
         const phi = (k / n) * Math.PI * 2;
         const a = Math.sqrt((1 + c) / 2), b = Math.sqrt((1 - c) / 2);
@@ -227,8 +227,8 @@ const MODEL_BASE = '../models/';
     });
 
     // centrepiece: a Hopf fibration straddling the glass
-    const hf = hopf(m * 0.36);
-    hf.position.set(0, 0, -D * 0.12);
+    const hf = hopf(m * 0.2);
+    hf.position.set(0, 0, -D * 0.35);
     room.add(hf);
     room.userData.hopf = hf;
     scene.add(room);
