@@ -128,16 +128,16 @@ const FACE_URL = 'face.json';
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.setClearColor(0x030404, 1);
   renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.92;
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x030404, 0.55, 1.5);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 10);
   let room = null, rebuild = true;
 
   // light: a key from low front-right, so the hollow reads as a face lit from above-left
-  scene.add(new THREE.HemisphereLight(0x9aa3a6, 0x0b0a09, 0.35));
-  const key = new THREE.DirectionalLight(0xfff1df, 1.25); key.position.set(0.25, -0.45, 1); scene.add(key);
-  const fill = new THREE.DirectionalLight(0xbcd2d8, 0.25); fill.position.set(-0.8, 0.1, 0.6); scene.add(fill);
+  scene.add(new THREE.HemisphereLight(0x8d979b, 0x070605, 0.16));
+  const key = new THREE.DirectionalLight(0xffeedb, 1.7); key.position.set(0.25, -0.45, 1); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xa9c4cc, 0.12); fill.position.set(-0.8, 0.1, 0.6); scene.add(fill);
 
   function gridWall(w, h, step, mat) {
     const pts = [];
@@ -158,7 +158,7 @@ const FACE_URL = 'face.json';
     const right = gridWall(D, h, step, mat); right.rotation.y = -Math.PI / 2; right.position.set(w / 2, 0, -D / 2); room.add(right);
     scene.add(room);
     // life-size, but never wider than the opening
-    if (mask) { const s = Math.min(0.01, (Math.min(w, h * 0.95)) / 19); mask.scale.setScalar(s); }
+    if (mask) { const s = Math.min(0.0085, Math.min(w, h) / 30); mask.scale.setScalar(s); }
   }
 
   /* ============ the mask ============ */
@@ -176,7 +176,7 @@ const FACE_URL = 'face.json';
     const gh = new THREE.BufferGeometry(); gh.setAttribute('position', new THREE.BufferAttribute(hol, 3)); gh.setIndex(d.f); gh.computeVertexNormals();
     g.morphAttributes.position = [new THREE.BufferAttribute(hol, 3)];
     g.morphAttributes.normal = [gh.getAttribute('normal')];
-    const m = new THREE.MeshStandardMaterial({ color: 0xe9e2d6, roughness: 0.88, metalness: 0, side: THREE.DoubleSide, morphTargets: true, morphNormals: true });
+    const m = new THREE.MeshStandardMaterial({ color: 0xd8d0c2, roughness: 0.9, metalness: 0, side: THREE.DoubleSide, morphTargets: true, morphNormals: true });
     maskMesh = new THREE.Mesh(g, m);
     mask = new THREE.Group(); mask.add(maskMesh);
     mask.position.set(0, 0, -0.035);
