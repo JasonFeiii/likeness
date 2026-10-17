@@ -108,7 +108,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); ou
     <button type="button" data-v="parallel" aria-pressed="true">Look through</button>
     <button type="button" data-v="cross" aria-pressed="false">Cross-eyed</button>
   </div>
-  <label for="relief">Relief <input id="relief" type="range" min="40" max="300" step="5" value="140"><output id="rv">1.40×</output></label>
+  <label for="relief">Relief <input id="relief" type="range" min="30" max="200" step="5" value="80"><output id="rv">0.80×</output></label>
   <label for="sw">Screen width <input id="sw" type="range" min="20" max="80" step="1"><output id="swv"></output></label>
   <label class="toggle" for="live"><input id="live" type="checkbox" checked> Moving noise</label>
   <label class="toggle" for="peek"><input id="peek" type="checkbox"> Peek</label>
@@ -127,13 +127,13 @@ const CANON = {"v":[0.0,-3.41,5.98,0.0,-1.13,7.48,0.0,-2.09,6.06,-0.46,0.96,6.63
   /* ============ settings ============ */
   const cfg = {
     screenCm: store.get('sw', Math.round(Math.min(70, Math.max(24, screen.width * 0.0205)))),
-    relief: store.get('relief', 1.4),
+    relief: store.get('relief2', 0.8),
     view: 'parallel', live: true
   };
   $('sw').value = cfg.screenCm; $('swv').textContent = cfg.screenCm + ' cm';
   $('relief').value = Math.round(cfg.relief * 100); $('rv').textContent = cfg.relief.toFixed(2) + '×';
   $('sw').addEventListener('input', e => { cfg.screenCm = +e.target.value; $('swv').textContent = cfg.screenCm + ' cm'; store.set('sw', cfg.screenCm); });
-  $('relief').addEventListener('input', e => { cfg.relief = e.target.value / 100; $('rv').textContent = cfg.relief.toFixed(2) + '×'; store.set('relief', cfg.relief); });
+  $('relief').addEventListener('input', e => { cfg.relief = e.target.value / 100; $('rv').textContent = cfg.relief.toFixed(2) + '×'; store.set('relief2', cfg.relief); });
   $('live').addEventListener('change', e => { cfg.live = e.target.checked; });
   // peek: tint the hidden shape, for anyone who has not fused the image yet
   $('peek').addEventListener('change', e => { cfg.peek = e.target.checked; });
@@ -271,7 +271,7 @@ const CANON = {"v":[0.0,-3.41,5.98,0.0,-1.13,7.48,0.0,-2.09,6.06,-0.46,0.96,6.63
   /* ============ the hidden face → depth map ============ */
   // canonical mesh (cm, y up, z toward the viewer) for the reference face
   const CV = CANON.v, CF = CANON.f;
-  let cz0 = 1e9, cz1 = -1e9; for (let i = 2; i < CV.length; i += 3) { cz0 = Math.min(cz0, CV[i]); cz1 = Math.max(cz1, CV[i]); }
+  let cz0 = 0; for (const i of [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109]) cz0 += CV[i*3+2] / 36;
   const OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
 
   // Returns, per landmark, a 3D point in metres: x,y on the face plane (screen-centred, y up) and relief r ≥ 0 toward the viewer.
@@ -280,8 +280,8 @@ const CANON = {"v":[0.0,-3.41,5.98,0.0,-1.13,7.48,0.0,-2.09,6.06,-0.46,0.96,6.63
     const H = innerHeight / pxPerM(), W = innerWidth / pxPerM();
     const faceH = Math.min(H * 0.92, W * 0.8);
     if (mode === 'camera' && livePts) {
-      let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9, zr = -1e9;
-      for (const i of OVAL) { y0 = Math.min(y0, livePts[i*3+1]); y1 = Math.max(y1, livePts[i*3+1]); x0 = Math.min(x0, livePts[i*3]); x1 = Math.max(x1, livePts[i*3]); zr = Math.max(zr, livePts[i*3+2]); }
+      let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9, zr = 0;
+      for (const i of OVAL) { y0 = Math.min(y0, livePts[i*3+1]); y1 = Math.max(y1, livePts[i*3+1]); x0 = Math.min(x0, livePts[i*3]); x1 = Math.max(x1, livePts[i*3]); zr += livePts[i*3+2] / OVAL.length; }
       const k = faceH / (y1 - y0), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
       for (let i = 0; i < 468; i++) {
         face3[i*3] = -(livePts[i*3] - cx) * k;                // mirrored
@@ -377,7 +377,7 @@ const CANON = {"v":[0.0,-3.41,5.98,0.0,-1.13,7.48,0.0,-2.09,6.06,-0.46,0.96,6.63
         row[x] = c;
         const p = PAL[c], o = (base + x) * 4;
         if (cfg.peek) {
-          const lift = Math.max(0, Math.min(1, (dBg - depth[base + x]) / (dBg * 0.45)));
+          const lift = Math.max(0, Math.min(1, (dBg - depth[base + x]) / (dBg * 0.32)));
           const m = 0.25 + 0.75 * lift;
           data[o] = p[0] * m + 255 * lift * 0.25; data[o+1] = p[1] * m + 150 * lift * 0.25; data[o+2] = p[2] * m + 90 * lift * 0.2; data[o+3] = 255;
         } else { data[o] = p[0]; data[o+1] = p[1]; data[o+2] = p[2]; data[o+3] = 255; }
