@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="The hollow-face illusion: a concave mask that turns to follow you.">
+<title>Likeness Hollow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@1,400&display=swap">
+<style>
+/* Layout: one life-size plaster mask behind the glass of a dark box. Corner instrument text,
+   an invitation card at first, then a slim control strip. Fixed dark look on purpose. */
+:root {
+  color-scheme: dark;
+  --void: #030404;
+  --fg: #e4e2dc;
+  --dim: rgba(228, 226, 220, 0.55);
+  --faint: rgba(228, 226, 220, 0.3);
+  --accent: #e9dcc6;
+  --panel: rgba(6, 7, 8, 0.74);
+  --edge: rgba(233, 220, 198, 0.16);
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --serif: "Cormorant Garamond", Georgia, serif;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--void); color: var(--fg); font: 12px/1.5 var(--mono); overflow: hidden; -webkit-font-smoothing: antialiased; }
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+.hud { position: fixed; z-index: 2; font: 400 11px/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-variant-numeric: tabular-nums; pointer-events: none; }
+.tl { top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); }
+.tr { top: calc(16px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; }
+.hud b { color: var(--dim); font-weight: 500; }
+.hud .on { color: var(--accent); }
+.whisper { position: fixed; z-index: 2; left: 50%; transform: translateX(-50%); top: calc(18px + env(safe-area-inset-top, 0px)); font: italic 400 18px/1.2 var(--serif); color: var(--dim); text-align: center; pointer-events: none; transition: opacity 1.2s; width: min(560px, calc(100% - 220px)); }
+
+.intro {
+  position: fixed; z-index: 3; left: 50%; bottom: calc(10vh + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  width: min(470px, calc(100% - 32px)); text-align: center;
+  display: grid; gap: 16px; justify-items: center;
+  padding: 24px 22px; border-radius: 18px;
+  background: var(--panel); border: 1px solid var(--edge);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.intro p.big { margin: 0; font: italic 400 clamp(24px, 4vw, 32px)/1.15 var(--serif); text-wrap: balance; }
+.intro p.small { margin: 0; color: var(--dim); font-size: 12px; line-height: 1.6; max-width: 46ch; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.btn {
+  appearance: none; cursor: pointer; padding: 12px 18px; border-radius: 999px;
+  border: 1px solid var(--edge); background: rgba(233, 220, 198, .07); color: var(--accent);
+  font: 500 11.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+}
+.btn:hover { background: rgba(233, 220, 198, .14); }
+.btn.ghost { color: var(--dim); background: transparent; }
+.btn[disabled] { opacity: .5; cursor: progress; }
+button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+.note { margin: 0; color: var(--accent); font-size: 12px; max-width: 46ch; }
+
+.bar {
+  position: fixed; z-index: 3; left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center;
+  padding: 10px 14px; border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--edge);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  max-width: calc(100% - 32px); box-sizing: border-box;
+}
+.seg { display: flex; gap: 4px; padding: 3px; border-radius: 10px; border: 1px solid var(--edge); }
+.seg button { appearance: none; border: 0; cursor: pointer; border-radius: 8px; padding: 7px 11px; background: transparent; color: var(--dim); font: 500 10.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.seg button[aria-pressed="true"] { background: rgba(233, 220, 198, .13); color: var(--fg); }
+.bar label { display: flex; align-items: center; gap: 10px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; font-size: 10.5px; }
+.bar input[type=range] { width: 110px; accent-color: var(--accent); }
+.bar output { color: var(--fg); font-variant-numeric: tabular-nums; min-width: 4ch; }
+.bar .btn { padding: 8px 12px; font-size: 10.5px; }
+@media (max-width: 640px) { .bar input[type=range] { width: 80px; } .whisper { display: none; } }
+</style>
+</head>
+<body>
+
+
+<canvas id="stage" aria-label="A plaster mask seen through the screen"></canvas>
+
+<div class="hud tl">Likeness · Hollow<br><span id="mode">Pointer</span></div>
+<div class="hud tr">Eye position (cm)<br><b id="eye">x +0.0  y +0.0  z 60.0</b><br><span id="depthread">Nose depth −7.6 cm</span></div>
+<p class="whisper" id="whisper"></p>
+
+<section class="intro" id="intro">
+  <p class="big">This face is hollow.<br>It will watch you anyway.</p>
+  <p class="small">The mask is the inside of a face: the nose points away from you. Your brain refuses to believe it and sees a normal face, so when you move, it seems to turn and follow you. Close one eye for the strongest effect.</p>
+  <div class="row">
+    <button class="btn" id="start" type="button">Track my head</button>
+    <button class="btn ghost" id="pointer" type="button">Use the pointer</button>
+  </div>
+  <p class="note" id="note" hidden></p>
+</section>
+
+<div class="bar" id="bar" hidden>
+  <div class="seg" role="group" aria-label="Mask">
+    <button type="button" data-m="hollow" aria-pressed="true">Hollow</button>
+    <button type="button" data-m="spin" aria-pressed="false">Spin</button>
+    <button type="button" data-m="solid" aria-pressed="false">Solid</button>
+  </div>
+  <label for="sw">Screen width <input id="sw" type="range" min="20" max="80" step="1"><output id="swv"></output></label>
+  <button class="btn ghost" id="centre" type="button">Recentre</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const MODEL_BASE = '../models/';
+const FACE_URL = 'face.json';
+(() => {
+  const $ = id => document.getElementById(id);
+  const note = t => { $('note').textContent = t; $('note').hidden = !t; };
+
+  /* ============ calibration ============ */
+  const store = { get(k, d) { try { const v = localStorage.getItem('lw-' + k); return v == null ? d : +v; } catch (e) { return d; } },
+                  set(k, v) { try { localStorage.setItem('lw-' + k, v); } catch (e) {} } };
+  const cal = { screenCm: store.get('sw', Math.round(Math.min(70, Math.max(24, screen.width * 0.0205)))) };
+  $('sw').value = cal.screenCm; $('swv').textContent = cal.screenCm + ' cm';
+  $('sw').addEventListener('input', e => { cal.screenCm = +e.target.value; $('swv').textContent = cal.screenCm + ' cm'; store.set('sw', cal.screenCm); rebuild = true; });
+  function viewportM() { const k = cal.screenCm / 100 / (screen.width || innerWidth); return { w: innerWidth * k, h: innerHeight * k }; }
+
+  /* ============ scene ============ */
+  const canvas = $('stage');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x030404, 1);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x030404, 0.55, 1.5);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 10);
+  let room = null, rebuild = true;
+
+  // light: a key from low front-right, so the hollow reads as a face lit from above-left
+  scene.add(new THREE.HemisphereLight(0x9aa3a6, 0x0b0a09, 0.35));
+  const key = new THREE.DirectionalLight(0xfff1df, 1.25); key.position.set(0.25, -0.45, 1); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xbcd2d8, 0.25); fill.position.set(-0.8, 0.1, 0.6); scene.add(fill);
+
+  function gridWall(w, h, step, mat) {
+    const pts = [];
+    for (let x = -w / 2; x <= w / 2 + 1e-6; x += step) pts.push(x, -h / 2, 0, x, h / 2, 0);
+    for (let y = -h / 2; y <= h / 2 + 1e-6; y += step) pts.push(-w / 2, y, 0, w / 2, y, 0);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return new THREE.LineSegments(g, mat);
+  }
+  function buildRoom() {
+    if (room) { scene.remove(room); room.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
+    room = new THREE.Group();
+    const { w, h } = viewportM(), D = 0.45, step = 0.04;
+    const mat = new THREE.LineBasicMaterial({ color: 0x8c8a84, transparent: true, opacity: 0.16 });
+    const back = gridWall(w, h, step, mat); back.position.z = -D; room.add(back);
+    const floor = gridWall(w, D, step, mat); floor.rotation.x = -Math.PI / 2; floor.position.set(0, -h / 2, -D / 2); room.add(floor);
+    const ceil = gridWall(w, D, step, mat); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, h / 2, -D / 2); room.add(ceil);
+    const left = gridWall(D, h, step, mat); left.rotation.y = Math.PI / 2; left.position.set(-w / 2, 0, -D / 2); room.add(left);
+    const right = gridWall(D, h, step, mat); right.rotation.y = -Math.PI / 2; right.position.set(w / 2, 0, -D / 2); room.add(right);
+    scene.add(room);
+    // life-size, but never wider than the opening
+    if (mask) { const s = Math.min(0.01, (Math.min(w, h * 0.95)) / 19); mask.scale.setScalar(s); }
+  }
+
+  /* ============ the mask ============ */
+  let mask = null, maskMesh = null;
+  const MOVE = { hollow: 1, solid: 0, spin: 0 };
+  let maskMode = 'hollow', morph = 1, spinA = 0;
+  fetch(FACE_URL).then(r => r.json()).then(d => {
+    const pos = new Float32Array(d.v), hol = new Float32Array(d.v.length);
+    for (let i = 0; i < pos.length; i += 3) { hol[i] = pos[i]; hol[i + 1] = pos[i + 1]; hol[i + 2] = -pos[i + 2]; }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setIndex(d.f);
+    g.computeVertexNormals();
+    // hollow target: same mesh mirrored in depth; its own normals point at the viewer
+    const gh = new THREE.BufferGeometry(); gh.setAttribute('position', new THREE.BufferAttribute(hol, 3)); gh.setIndex(d.f); gh.computeVertexNormals();
+    g.morphAttributes.position = [new THREE.BufferAttribute(hol, 3)];
+    g.morphAttributes.normal = [gh.getAttribute('normal')];
+    const m = new THREE.MeshStandardMaterial({ color: 0xe9e2d6, roughness: 0.88, metalness: 0, side: THREE.DoubleSide, morphTargets: true, morphNormals: true });
+    maskMesh = new THREE.Mesh(g, m);
+    mask = new THREE.Group(); mask.add(maskMesh);
+    mask.position.set(0, 0, -0.035);
+    scene.add(mask);
+    rebuild = true;
+  }).catch(e => { console.error(e); note('The mask could not load. Reload the page to try again.'); });
+
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    maskMode = b.dataset.m; spinA = 0;
+  }));
+
+  /* ============ off-axis projection ============ */
+  function setProjection(eye) {
+    const { w, h } = viewportM(), n = 0.01, f = 10, ez = Math.max(0.08, eye.z);
+    camera.position.set(eye.x, eye.y, ez); camera.quaternion.set(0, 0, 0, 1); camera.updateMatrixWorld();
+    camera.projectionMatrix.makePerspective((-w / 2 - eye.x) * n / ez, (w / 2 - eye.x) * n / ez, (h / 2 - eye.y) * n / ez, (-h / 2 - eye.y) * n / ez, n, f);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  }
+
+  /* ============ eye input ============ */
+  const eye = { x: 0, y: 0, z: 0.6 }, raw = { x: 0, y: 0, z: 0.6 };
+  let mode = 'pointer', centre = { x: 0, y: 0 };
+  window.addEventListener('pointermove', e => {
+    if (mode !== 'pointer') return;
+    const { w, h } = viewportM();
+    raw.x = (e.clientX / innerWidth - 0.5) * w * 1.6; raw.y = -(e.clientY / innerHeight - 0.5) * h * 1.6; raw.z = 0.6;
+  }, { passive: true });
+  function smooth(cur, target, dt) {
+    const speed = Math.abs(target - cur) / Math.max(dt, 1e-3);
+    return cur + (target - cur) * (1 - Math.exp(-dt * 2 * Math.PI * (1.2 + 90 * speed)));
+  }
+
+  /* ============ face tracking (loaded on demand) ============ */
+  let detector = null, mesher = null, stream = null, busy = false, roi = null;
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
+  const detC = document.createElement('canvas'); detC.width = detC.height = 128; const detX = detC.getContext('2d', { willReadFrequently: true });
+  const cropC = document.createElement('canvas'); cropC.width = cropC.height = 192; const cropX = cropC.getContext('2d', { willReadFrequently: true });
+  const ANCH = (() => { const a = []; for (const [s, n] of [[8, 2], [16, 6]]) { const f = 128 / s; for (let y = 0; y < f; y++) for (let x = 0; x < f; x++) for (let k = 0; k < n; k++) a.push([(x + .5) / f, (y + .5) / f]); } return a; })();
+  const EYE_R = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246];
+  const EYE_L = [263,249,390,373,374,380,381,382,362,398,384,385,386,387,388,466];
+  function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('script ' + src)); document.head.appendChild(s); }); }
+  async function loadModels() {
+    if (!window.tf) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+    try { await tf.setBackend('webgl'); } catch (e) {}
+    await tf.ready();
+    const packed = async u => { const r = await fetch(u); if (!r.ok) throw new Error(u + ' ' + r.status); const j = await r.json();
+      const bin = atob(j.weightData), buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      return tf.loadGraphModel(tf.io.fromMemory({ format: j.format, modelTopology: j.modelTopology, weightSpecs: j.weightSpecs, weightData: buf.buffer, signature: j.signature })); };
+    [detector, mesher] = await Promise.all([packed(MODEL_BASE + 'facemesh-detection-short.packed.json'), packed(MODEL_BASE + 'facemesh.packed.json')]);
+    tf.tidy(() => { detector.execute(tf.zeros([1, 128, 128, 3])); mesher.execute(tf.zeros([1, 192, 192, 3]), ['Identity_2', 'Identity_1']); });
+  }
+  async function detect(sw, sh) {
+    const s = 128 / Math.max(sw, sh), dw = sw * s, dh = sh * s, ox = (128 - dw) / 2, oy = (128 - dh) / 2;
+    detX.fillStyle = '#000'; detX.fillRect(0, 0, 128, 128); detX.drawImage(video, ox, oy, dw, dh);
+    const out = tf.tidy(() => detector.execute(tf.browser.fromPixels(detC).toFloat().div(127.5).sub(1).expandDims(0)));
+    const d = await out.data(); out.dispose();
+    let best = -1, bs = -1e9; for (let i = 0; i < 896; i++) if (d[i * 17] > bs) { bs = d[i * 17]; best = i; }
+    if (1 / (1 + Math.exp(-bs)) < 0.55) return null;
+    const r = i => d[best * 17 + 1 + i], [ax, ay] = ANCH[best], toS = (u, v) => [(u * 128 - ox) / s, (v * 128 - oy) / s];
+    const [cx, cy] = toS(r(0) / 128 + ax, r(1) / 128 + ay), eR = toS(r(4) / 128 + ax, r(5) / 128 + ay), eL = toS(r(6) / 128 + ax, r(7) / 128 + ay);
+    return { cx, cy, size: Math.max(r(2), r(3)) / s * 1.5, ang: Math.atan2(eL[1] - eR[1], eL[0] - eR[0]) };
+  }
+  async function meshOnce(roi) {
+    const sc = roi.size / 192;
+    cropX.setTransform(1, 0, 0, 1, 0, 0); cropX.fillStyle = '#000'; cropX.fillRect(0, 0, 192, 192);
+    cropX.translate(96, 96); cropX.rotate(-roi.ang); cropX.scale(1 / sc, 1 / sc); cropX.translate(-roi.cx, -roi.cy); cropX.drawImage(video, 0, 0); cropX.setTransform(1, 0, 0, 1, 0, 0);
+    const outs = tf.tidy(() => mesher.execute(tf.browser.fromPixels(cropC).toFloat().div(255).expandDims(0), ['Identity_2', 'Identity_1']));
+    const [m, f] = await Promise.all(outs.map(t => t.data())); outs.forEach(t => t.dispose());
+    const c = Math.cos(roi.ang), s = Math.sin(roi.ang), pts = new Float32Array(936);
+    for (let i = 0; i < 468; i++) { const u = (m[i*3] - 96) * sc, v = (m[i*3+1] - 96) * sc; pts[i*2] = roi.cx + c * u - s * v; pts[i*2+1] = roi.cy + s * u + c * v; }
+    return { pts, flag: f[0] };
+  }
+  const centreOf = (pts, idx) => { let x = 0, y = 0; for (const i of idx) { x += pts[i*2]; y += pts[i*2+1]; } return [x / idx.length, y / idx.length]; };
+  const IPD = 0.063, HFOV = 62 * Math.PI / 180;
+  async function track() {
+    if (mode !== 'camera' || busy || video.readyState < 2) return;
+    busy = true;
+    try {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!roi) { roi = await detect(vw, vh); if (!roi) return; }
+      const r = await meshOnce(roi);
+      if (r.flag < 0.5) { roi = null; return; }
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let i = 0; i < 468; i++) { x0 = Math.min(x0, r.pts[i*2]); x1 = Math.max(x1, r.pts[i*2]); y0 = Math.min(y0, r.pts[i*2+1]); y1 = Math.max(y1, r.pts[i*2+1]); }
+      const eR = centreOf(r.pts, EYE_R), eL = centreOf(r.pts, EYE_L);
+      roi = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, size: Math.max(x1 - x0, y1 - y0) * 1.55, ang: Math.atan2(eL[1] - eR[1], eL[0] - eR[0]) };
+      const fpx = (vw / 2) / Math.tan(HFOV / 2), dpx = Math.hypot(eL[0] - eR[0], eL[1] - eR[1]) || 1, Z = fpx * IPD / dpx;
+      const mx = (eR[0] + eL[0]) / 2, my = (eR[1] + eL[1]) / 2;
+      raw.x = -(mx - vw / 2) * Z / fpx; raw.y = -(my - vh / 2) * Z / fpx + viewportM().h / 2; raw.z = Z;
+    } finally { busy = false; }
+  }
+  async function startCamera() {
+    $('start').disabled = true; note('Loading the face model…');
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('nocam');
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+      video.srcObject = stream; await video.play();
+      if (!mesher) await loadModels();
+      mode = 'camera'; $('mode').innerHTML = '<span class="on">Head tracking</span>';
+      $('intro').hidden = true; $('bar').hidden = false; note('');
+    } catch (e) {
+      console.error(e);
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      $('start').disabled = false;
+      note(e && e.message && e.message.startsWith('script') ? 'The face model could not load. Check your connection and try again.'
+        : 'The camera stayed closed here. Allow camera access, or use the pointer to look around.');
+    }
+  }
+  $('start').addEventListener('click', startCamera);
+  $('pointer').addEventListener('click', () => { mode = 'pointer'; $('intro').hidden = true; $('bar').hidden = false; $('mode').textContent = 'Pointer'; });
+  $('centre').addEventListener('click', () => { centre = { x: raw.x, y: raw.y }; });
+
+  /* ============ loop ============ */
+  const lines = {
+    hollow: 'It is hollow. It turns to follow you anyway.',
+    spin: 'Watch the back come round. It turns the wrong way.',
+    solid: 'This is the same face, solid. It stays still.'
+  };
+  let shownLine = '';
+  function resize() { renderer.setSize(innerWidth, innerHeight, false); }
+  window.addEventListener('resize', () => { resize(); rebuild = true; });
+  resize();
+  let last = performance.now(), hudT = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (rebuild) { buildRoom(); rebuild = false; }
+    if (mode === 'camera') track();
+    const cx = mode === 'camera' ? centre.x : 0, cy = mode === 'camera' ? centre.y : 0;
+    eye.x = smooth(eye.x, raw.x - cx, dt); eye.y = smooth(eye.y, raw.y - cy, dt); eye.z = smooth(eye.z, raw.z, dt);
+    setProjection(eye);
+
+    if (maskMesh) {
+      // morph between solid and hollow; spin uses the solid face, double-sided, so its inside comes round
+      const target = MOVE[maskMode];
+      morph += (target - morph) * Math.min(1, dt * 2.2);
+      maskMesh.morphTargetInfluences[0] = morph;
+      // keep the face reading as "lit from above-left": the light flips as the depth flips
+      const k = 2 * morph - 1;
+      key.position.set(0.25 * k, -0.45 * k, 1);
+      if (maskMode === 'spin') spinA += dt * 0.55; else spinA += (Math.round(spinA / (2 * Math.PI)) * 2 * Math.PI - spinA) * Math.min(1, dt * 3);
+      mask.rotation.y = spinA;
+    }
+    if (!$('bar').hidden && shownLine !== maskMode) { shownLine = maskMode; $('whisper').textContent = lines[maskMode]; }
+
+    renderer.render(scene, camera);
+    if (now - hudT > 250) {
+      hudT = now;
+      const f = v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1);
+      $('eye').textContent = 'x ' + f(eye.x) + '  y ' + f(eye.y) + '  z ' + (eye.z * 100).toFixed(1);
+      const nose = 7.6 * (1 - 2 * morph);
+      $('depthread').textContent = 'Nose ' + (nose < 0 ? 'depth ' : 'height +') + nose.toFixed(1) + ' cm';
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
