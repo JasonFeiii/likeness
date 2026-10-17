@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Head-coupled perspective: the screen becomes a window into a box.">
+<title>Likeness Window</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@1,400&display=swap">
+<style>
+/* Layout: the whole viewport is the opening of a box that sits behind (and in front of) the screen.
+   Instrument text hugs the corners; one small control strip at the bottom. Fixed dark look on purpose. */
+:root {
+  color-scheme: dark;
+  --void: #040506;
+  --fg: #dfe6e6;
+  --dim: rgba(223, 230, 230, 0.55);
+  --faint: rgba(223, 230, 230, 0.3);
+  --accent: #c9f2e8;
+  --panel: rgba(6, 9, 11, 0.72);
+  --edge: rgba(201, 242, 232, 0.16);
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --serif: "Cormorant Garamond", Georgia, serif;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--void); color: var(--fg); font: 12px/1.5 var(--mono); overflow: hidden; -webkit-font-smoothing: antialiased; }
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+.hud { position: fixed; z-index: 2; font: 400 11px/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); font-variant-numeric: tabular-nums; pointer-events: none; }
+.tl { top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); }
+.tr { top: calc(16px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; }
+.hud b { color: var(--dim); font-weight: 500; }
+.hud .on { color: var(--accent); }
+
+.intro {
+  position: fixed; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(460px, calc(100% - 32px)); text-align: center;
+  display: grid; gap: 16px; justify-items: center;
+  padding: 26px 22px; border-radius: 18px;
+  background: var(--panel); border: 1px solid var(--edge);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.intro p.big { margin: 0; font: italic 400 clamp(24px, 4vw, 32px)/1.15 var(--serif); color: var(--fg); text-wrap: balance; }
+.intro p.small { margin: 0; color: var(--dim); font-size: 12px; line-height: 1.6; max-width: 44ch; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.btn {
+  appearance: none; cursor: pointer; padding: 12px 18px; border-radius: 999px;
+  border: 1px solid var(--edge); background: rgba(201, 242, 232, .07); color: var(--accent);
+  font: 500 11.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+}
+.btn:hover { background: rgba(201, 242, 232, .14); }
+.btn.ghost { color: var(--dim); background: transparent; }
+.btn[disabled] { opacity: .5; cursor: progress; }
+button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+.note { margin: 0; color: var(--accent); font-size: 12px; max-width: 46ch; }
+
+.bar {
+  position: fixed; z-index: 3; left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 18px; align-items: center; flex-wrap: wrap; justify-content: center;
+  padding: 10px 16px; border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--edge);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  max-width: calc(100% - 32px); box-sizing: border-box;
+}
+.bar label { display: flex; align-items: center; gap: 10px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; font-size: 10.5px; }
+.bar input[type=range] { width: 120px; accent-color: var(--accent); }
+.bar output { color: var(--fg); font-variant-numeric: tabular-nums; min-width: 4ch; }
+.bar .btn { padding: 8px 12px; font-size: 10.5px; }
+
+#pip { position: fixed; z-index: 2; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); width: 160px; height: 120px; border-radius: 10px; border: 1px solid var(--edge); opacity: .85; }
+
+@media (max-width: 640px) {
+  .bar input[type=range] { width: 90px; }
+  #pip { width: 112px; height: 84px; }
+}
+</style>
+</head>
+<body>
+
+
+<canvas id="stage" aria-label="A box seen through the screen"></canvas>
+
+<div class="hud tl">Likeness · Window<br><span id="mode">Pointer</span></div>
+<div class="hud tr">Eye position (cm)<br><b id="eye">x +0.0  y +0.0  z 60.0</b><br><span id="fps">— fps</span></div>
+
+<section class="intro" id="intro">
+  <p class="big">The screen is a window.<br>Move your head to look in.</p>
+  <p class="small">The camera finds your eyes and the picture is redrawn from exactly where they are. Close one eye for the strongest effect: depth from motion works with a single eye.</p>
+  <div class="row">
+    <button class="btn" id="start" type="button">Track my head</button>
+    <button class="btn ghost" id="pointer" type="button">Use the pointer</button>
+  </div>
+  <p class="note" id="note" hidden></p>
+</section>
+
+<div class="bar" id="bar" hidden>
+  <label for="sw">Screen width <input id="sw" type="range" min="20" max="80" step="1"><output id="swv"></output></label>
+  <label for="depth">Box depth <input id="depth" type="range" min="15" max="120" step="1" value="50"><output id="dv">50 cm</output></label>
+  <label for="gain">Parallax <input id="gain" type="range" min="50" max="200" step="5" value="100"><output id="gv">1.00×</output></label>
+  <button class="btn ghost" id="pipbtn" type="button">Camera view</button>
+  <button class="btn ghost" id="centre" type="button">Recentre</button>
+</div>
+<canvas id="pip" width="320" height="240" hidden></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const MODEL_BASE = '../models/';
+(() => {
+  const $ = id => document.getElementById(id);
+  const note = t => { $('note').textContent = t; $('note').hidden = !t; };
+
+  /* ============ calibration (metres) ============ */
+  const store = { get(k, d) { try { const v = localStorage.getItem('lw-' + k); return v == null ? d : +v; } catch (e) { return d; } },
+                  set(k, v) { try { localStorage.setItem('lw-' + k, v); } catch (e) {} } };
+  const guessCm = Math.round(Math.min(70, Math.max(24, screen.width * 0.0205)));
+  const cal = { screenCm: store.get('sw', guessCm), depthCm: store.get('depth', 50), gain: store.get('gain', 1) };
+  $('sw').value = cal.screenCm; $('swv').textContent = cal.screenCm + ' cm';
+  $('depth').value = cal.depthCm; $('dv').textContent = cal.depthCm + ' cm';
+  $('gain').value = Math.round(cal.gain * 100); $('gv').textContent = cal.gain.toFixed(2) + '×';
+  $('sw').addEventListener('input', e => { cal.screenCm = +e.target.value; $('swv').textContent = cal.screenCm + ' cm'; store.set('sw', cal.screenCm); rebuild = true; });
+  $('depth').addEventListener('input', e => { cal.depthCm = +e.target.value; $('dv').textContent = cal.depthCm + ' cm'; store.set('depth', cal.depthCm); rebuild = true; });
+  $('gain').addEventListener('input', e => { cal.gain = e.target.value / 100; $('gv').textContent = cal.gain.toFixed(2) + '×'; store.set('gain', cal.gain); });
+
+  // viewport size in metres: the browser window is a fraction of the physical screen
+  function viewportM() {
+    const mPerPx = cal.screenCm / 100 / (screen.width || innerWidth);
+    return { w: innerWidth * mPerPx, h: innerHeight * mPerPx };
+  }
+
+  /* ============ three.js scene ============ */
+  const canvas = $('stage');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x040506, 1);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 10);
+  scene.fog = new THREE.Fog(0x040506, 0.5, 1.6);
+  let room = null, rebuild = true;
+  const COL = { grid: 0x9fb8b6, accent: 0xc9f2e8, warm: 0xffc9a8 };
+
+  function lineMat(color, opacity) { return new THREE.LineBasicMaterial({ color, transparent: true, opacity, fog: true }); }
+
+  function gridWall(w, h, step, mat) {
+    const pts = [];
+    for (let x = -w / 2; x <= w / 2 + 1e-6; x += step) pts.push(x, -h / 2, 0, x, h / 2, 0);
+    for (let y = -h / 2; y <= h / 2 + 1e-6; y += step) pts.push(-w / 2, y, 0, w / 2, y, 0);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return new THREE.LineSegments(g, mat);
+  }
+
+  // Hopf fibration: circles over latitude rings of S², stereographically projected from S³
+  function hopf(radius) {
+    const grp = new THREE.Group();
+    const lats = [0.2, 0.45, 0.65, 0.82];
+    lats.forEach((c, li) => {
+      const n = 14 + li * 2;
+      for (let k = 0; k < n; k++) {
+        const phi = (k / n) * Math.PI * 2;
+        const a = Math.sqrt((1 + c) / 2), b = Math.sqrt((1 - c) / 2);
+        const pts = [];
+        for (let i = 0; i <= 96; i++) {
+          const th = (i / 96) * Math.PI * 2;
+          const x0 = a * Math.cos(th), x1 = a * Math.sin(th), x2 = b * Math.cos(th + phi), x3 = b * Math.sin(th + phi);
+          const s = 1 / (1 - x3 + 1e-6);
+          pts.push(new THREE.Vector3(x0 * s, x1 * s, x2 * s).multiplyScalar(radius * 0.5));
+        }
+        const g = new THREE.BufferGeometry().setFromPoints(pts);
+        const hue = 0.47 + li * 0.035;
+        const col = new THREE.Color().setHSL(hue, 0.55, 0.62 + li * 0.06);
+        grp.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.85, fog: true })));
+      }
+    });
+    return grp;
+  }
+
+  function target(r) {
+    const grp = new THREE.Group();
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 48), new THREE.MeshBasicMaterial({ color: 0x07090b, fog: true }));
+    grp.add(disc);
+    [1, 0.68, 0.36].forEach((k, i) => {
+      const pts = []; for (let j = 0; j <= 64; j++) { const a = j / 64 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * r * k, Math.sin(a) * r * k, 0.0005)); }
+      grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(i === 0 ? COL.accent : COL.grid, i === 0 ? 0.95 : 0.6)));
+    });
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(r * 0.09, 20), new THREE.MeshBasicMaterial({ color: COL.warm, fog: true }));
+    dot.position.z = 0.001; grp.add(dot);
+    return grp;
+  }
+
+  function seeded(seed) { return () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
+
+  function buildRoom() {
+    if (room) { scene.remove(room); room.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
+    room = new THREE.Group();
+    const { w, h } = viewportM(), D = cal.depthCm / 100, step = 0.04;
+    const wallMat = lineMat(COL.grid, 0.32);
+    const back = gridWall(w, h, step, wallMat); back.position.z = -D; room.add(back);
+    const floor = gridWall(w, D, step, wallMat); floor.rotation.x = -Math.PI / 2; floor.position.set(0, -h / 2, -D / 2); room.add(floor);
+    const ceil = gridWall(w, D, step, wallMat); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, h / 2, -D / 2); room.add(ceil);
+    const left = gridWall(D, h, step, wallMat); left.rotation.y = Math.PI / 2; left.position.set(-w / 2, 0, -D / 2); room.add(left);
+    const right = gridWall(D, h, step, wallMat); right.rotation.y = -Math.PI / 2; right.position.set(w / 2, 0, -D / 2); room.add(right);
+    // bright frame at the screen plane, so the "window" edge reads
+    const fr = new THREE.BufferGeometry().setFromPoints([[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2],[-w/2,-h/2]].map(p => new THREE.Vector3(p[0], p[1], 0)));
+    room.add(new THREE.Line(fr, lineMat(COL.accent, 0.5)));
+
+    // targets: some deep in the box, some floating in front of the glass, each tied to the back wall
+    const rnd = seeded(7), m = Math.min(w, h);
+    room.userData.targets = [];
+    const zs = [-0.9, -0.75, -0.6, -0.45, -0.3, -0.15, 0.08, 0.18, 0.28];
+    zs.forEach((zf, i) => {
+      const r = m * (0.035 + rnd() * 0.035);
+      const t = target(r);
+      const x = (rnd() - 0.5) * (w - r * 4), y = (rnd() - 0.5) * (h - r * 4) * 0.9;
+      const z = zf < 0 ? zf * D : zf * Math.min(0.2, D);
+      t.position.set(x, y, z);
+      room.add(t);
+      const tie = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, y, z - 0.001), new THREE.Vector3(x, y, -D)]);
+      const tieLine = new THREE.Line(tie, lineMat(COL.grid, 0.45)); room.add(tieLine);
+      // contact shadow on the floor
+      const sh = new THREE.Mesh(new THREE.CircleGeometry(r * 1.2, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, fog: true }));
+      sh.rotation.x = -Math.PI / 2; sh.position.set(x, -h / 2 + 0.0008, z); sh.scale.set(1, 0.6, 1);
+      room.add(sh);
+      room.userData.targets.push({ t, tie, sh, base: new THREE.Vector3(x, y, z), phase: rnd() * 6.28, D, h });
+    });
+
+    // centrepiece: a Hopf fibration straddling the glass
+    const hf = hopf(m * 0.36);
+    hf.position.set(0, 0, -D * 0.12);
+    room.add(hf);
+    room.userData.hopf = hf;
+    scene.add(room);
+  }
+
+  /* ============ off-axis projection (Kooima) ============ */
+  function setProjection(eye) {
+    const { w, h } = viewportM(), n = 0.01, f = 10;
+    const ez = Math.max(0.08, eye.z);
+    const l = (-w / 2 - eye.x) * n / ez, r = (w / 2 - eye.x) * n / ez;
+    const b = (-h / 2 - eye.y) * n / ez, t = (h / 2 - eye.y) * n / ez;
+    camera.position.set(eye.x, eye.y, ez);
+    camera.quaternion.set(0, 0, 0, 1);
+    camera.updateMatrixWorld();
+    camera.projectionMatrix.makePerspective(l, r, t, b, n, f);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  }
+
+  /* ============ eye input ============ */
+  const eye = { x: 0, y: 0, z: 0.6 };          // filtered, metres, screen-centred
+  const raw = { x: 0, y: 0, z: 0.6, t: 0 };
+  let mode = 'pointer', centre = { x: 0, y: 0 };
+
+  // pointer stand-in: the pointer is where your eye would be
+  window.addEventListener('pointermove', e => {
+    if (mode !== 'pointer') return;
+    const { w, h } = viewportM();
+    raw.x = (e.clientX / innerWidth - 0.5) * w * 1.6;
+    raw.y = -(e.clientY / innerHeight - 0.5) * h * 1.6;
+    raw.z = 0.6;
+  }, { passive: true });
+  window.addEventListener('deviceorientation', e => {
+    if (mode !== 'pointer' || e.gamma == null) return;
+    const { w, h } = viewportM();
+    raw.x = Math.max(-1, Math.min(1, e.gamma / 30)) * w * 0.8;
+    raw.y = Math.max(-1, Math.min(1, (e.beta - 45) / 30)) * h * 0.8;
+  });
+
+  // one-euro style smoothing: steady when still, fast when moving
+  function smooth(cur, target, dt) {
+    const speed = Math.abs(target - cur) / Math.max(dt, 1e-3);
+    const cutoff = 1.2 + 0.9 * speed * 100;
+    const a = 1 - Math.exp(-dt * 2 * Math.PI * cutoff);
+    return cur + (target - cur) * a;
+  }
+
+  /* ============ face tracking (TF.js, loaded on demand) ============ */
+  let detector = null, mesher = null, stream = null, busy = false, roi = null;
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
+  const detC = document.createElement('canvas'); detC.width = detC.height = 128; const detX = detC.getContext('2d', { willReadFrequently: true });
+  const cropC = document.createElement('canvas'); cropC.width = cropC.height = 192; const cropX = cropC.getContext('2d', { willReadFrequently: true });
+  const ANCH = (() => { const a = []; for (const [s, n] of [[8, 2], [16, 6]]) { const f = 128 / s; for (let y = 0; y < f; y++) for (let x = 0; x < f; x++) for (let k = 0; k < n; k++) a.push([(x + .5) / f, (y + .5) / f]); } return a; })();
+  const EYE_R = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246];
+  const EYE_L = [263,249,390,373,374,380,381,382,362,398,384,385,386,387,388,466];
+
+  function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('script ' + src)); document.head.appendChild(s); }); }
+  async function loadModels() {
+    if (!window.tf) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+    try { await tf.setBackend('webgl'); } catch (e) {}
+    await tf.ready();
+    const packed = async u => { const r = await fetch(u); if (!r.ok) throw new Error(u + ' ' + r.status); const j = await r.json();
+      const bin = atob(j.weightData), buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      return tf.loadGraphModel(tf.io.fromMemory({ format: j.format, modelTopology: j.modelTopology, weightSpecs: j.weightSpecs, weightData: buf.buffer, signature: j.signature })); };
+    [detector, mesher] = await Promise.all([packed(MODEL_BASE + 'facemesh-detection-short.packed.json'), packed(MODEL_BASE + 'facemesh.packed.json')]);
+    tf.tidy(() => { detector.execute(tf.zeros([1, 128, 128, 3])); mesher.execute(tf.zeros([1, 192, 192, 3]), ['Identity_2', 'Identity_1']); });
+  }
+  async function detect(sw, sh) {
+    const s = 128 / Math.max(sw, sh), dw = sw * s, dh = sh * s, ox = (128 - dw) / 2, oy = (128 - dh) / 2;
+    detX.fillStyle = '#000'; detX.fillRect(0, 0, 128, 128); detX.drawImage(video, ox, oy, dw, dh);
+    const out = tf.tidy(() => detector.execute(tf.browser.fromPixels(detC).toFloat().div(127.5).sub(1).expandDims(0)));
+    const d = await out.data(); out.dispose();
+    let best = -1, bs = -1e9; for (let i = 0; i < 896; i++) if (d[i * 17] > bs) { bs = d[i * 17]; best = i; }
+    if (1 / (1 + Math.exp(-bs)) < 0.55) return null;
+    const r = i => d[best * 17 + 1 + i], [ax, ay] = ANCH[best], toS = (u, v) => [(u * 128 - ox) / s, (v * 128 - oy) / s];
+    const [cx, cy] = toS(r(0) / 128 + ax, r(1) / 128 + ay), eR = toS(r(4) / 128 + ax, r(5) / 128 + ay), eL = toS(r(6) / 128 + ax, r(7) / 128 + ay);
+    return { cx, cy, size: Math.max(r(2), r(3)) / s * 1.5, ang: Math.atan2(eL[1] - eR[1], eL[0] - eR[0]) };
+  }
+  async function mesh(roi) {
+    const sc = roi.size / 192;
+    cropX.setTransform(1, 0, 0, 1, 0, 0); cropX.fillStyle = '#000'; cropX.fillRect(0, 0, 192, 192);
+    cropX.translate(96, 96); cropX.rotate(-roi.ang); cropX.scale(1 / sc, 1 / sc); cropX.translate(-roi.cx, -roi.cy); cropX.drawImage(video, 0, 0); cropX.setTransform(1, 0, 0, 1, 0, 0);
+    const outs = tf.tidy(() => mesher.execute(tf.browser.fromPixels(cropC).toFloat().div(255).expandDims(0), ['Identity_2', 'Identity_1']));
+    const [m, f] = await Promise.all(outs.map(t => t.data())); outs.forEach(t => t.dispose());
+    const c = Math.cos(roi.ang), s = Math.sin(roi.ang), pts = new Float32Array(936);
+    for (let i = 0; i < 468; i++) { const u = (m[i*3] - 96) * sc, v = (m[i*3+1] - 96) * sc; pts[i*2] = roi.cx + c * u - s * v; pts[i*2+1] = roi.cy + s * u + c * v; }
+    return { pts, flag: f[0] };
+  }
+  const centreOf = (pts, idx) => { let x = 0, y = 0; for (const i of idx) { x += pts[i*2]; y += pts[i*2+1]; } return [x / idx.length, y / idx.length]; };
+
+  const IPD = 0.063;           // average adult interpupillary distance, metres
+  const HFOV = 62 * Math.PI / 180; // typical laptop webcam horizontal field of view
+  let lastPts = null, trackFps = 0, trackN = 0, trackT0 = performance.now();
+
+  async function track() {
+    if (mode !== 'camera' || busy || video.readyState < 2) return;
+    busy = true;
+    try {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!roi) { roi = await detect(vw, vh); if (!roi) { lastPts = null; return; } }
+      const r = await mesh(roi);
+      if (r.flag < 0.5) { roi = null; lastPts = null; return; }
+      lastPts = r.pts;
+      // next crop from this mesh
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let i = 0; i < 468; i++) { x0 = Math.min(x0, r.pts[i*2]); x1 = Math.max(x1, r.pts[i*2]); y0 = Math.min(y0, r.pts[i*2+1]); y1 = Math.max(y1, r.pts[i*2+1]); }
+      const eR = centreOf(r.pts, EYE_R), eL = centreOf(r.pts, EYE_L);
+      roi = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, size: Math.max(x1 - x0, y1 - y0) * 1.55, ang: Math.atan2(eL[1] - eR[1], eL[0] - eR[0]) };
+
+      // pinhole model: eye distance in pixels gives depth; the midpoint gives direction
+      const fpx = (vw / 2) / Math.tan(HFOV / 2);
+      const dpx = Math.hypot(eL[0] - eR[0], eL[1] - eR[1]) || 1;
+      const Z = fpx * IPD / dpx;
+      const mx = (eR[0] + eL[0]) / 2, my = (eR[1] + eL[1]) / 2;
+      const X = -(mx - vw / 2) * Z / fpx;                  // mirror: your right is the camera's left
+      const Y = -(my - vh / 2) * Z / fpx;
+      const { h } = viewportM();
+      raw.x = X; raw.y = Y + h / 2;                        // webcam sits at the top edge of the screen
+      raw.z = Z; raw.t = performance.now();
+      trackN++;
+      const now = performance.now(); if (now - trackT0 > 1000) { trackFps = trackN * 1000 / (now - trackT0); trackN = 0; trackT0 = now; }
+    } finally { busy = false; }
+  }
+
+  async function startCamera() {
+    $('start').disabled = true; note('Loading the face model…');
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('nocam');
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+      video.srcObject = stream; await video.play();
+      if (!mesher) await loadModels();
+      mode = 'camera'; $('mode').innerHTML = '<span class="on">Head tracking</span>';
+      $('intro').hidden = true; $('bar').hidden = false; note('');
+    } catch (e) {
+      console.error(e);
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      $('start').disabled = false;
+      note(e && e.message && e.message.startsWith('script') ? 'The face model could not load. Check your connection and try again.'
+        : 'The camera stayed closed here. Allow camera access, or use the pointer to look around.');
+    }
+  }
+  $('start').addEventListener('click', startCamera);
+  $('pointer').addEventListener('click', () => { mode = 'pointer'; $('intro').hidden = true; $('bar').hidden = false; $('mode').textContent = 'Pointer'; });
+  // treat the current head position as straight-on
+  $('centre').addEventListener('click', () => { centre = { x: raw.x, y: raw.y }; });
+  $('pipbtn').addEventListener('click', () => { $('pip').hidden = !$('pip').hidden; });
+
+  // small camera view with the two eye centres marked
+  const pip = $('pip'), px = pip.getContext('2d');
+  function drawPip() {
+    if (pip.hidden || mode !== 'camera' || video.readyState < 2) return;
+    px.save(); px.translate(pip.width, 0); px.scale(-1, 1);
+    px.drawImage(video, 0, 0, pip.width, pip.height);
+    if (lastPts) {
+      const sx = pip.width / video.videoWidth, sy = pip.height / video.videoHeight;
+      px.fillStyle = 'rgba(201,242,232,.55)';
+      for (let i = 0; i < 468; i += 3) px.fillRect(lastPts[i*2] * sx - .5, lastPts[i*2+1] * sy - .5, 1.2, 1.2);
+      px.fillStyle = '#ffc9a8';
+      for (const e of [centreOf(lastPts, EYE_R), centreOf(lastPts, EYE_L)]) { px.beginPath(); px.arc(e[0] * sx, e[1] * sy, 3, 0, 6.283); px.fill(); }
+    }
+    px.restore();
+  }
+
+  /* ============ loop ============ */
+  let last = performance.now(), frames = 0, fpsT = last;
+  function resize() { renderer.setSize(innerWidth, innerHeight, false); }
+  window.addEventListener('resize', () => { resize(); rebuild = true; });
+  resize();
+
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (rebuild) { buildRoom(); rebuild = false; }
+    if (mode === 'camera') track();
+
+    // centre-relative, with parallax gain
+    const tx = (raw.x - (mode === 'camera' ? centre.x : 0)) * cal.gain;
+    const ty = (raw.y - (mode === 'camera' ? centre.y : 0)) * cal.gain;
+    eye.x = smooth(eye.x, tx, dt); eye.y = smooth(eye.y, ty, dt); eye.z = smooth(eye.z, raw.z, dt);
+    setProjection(eye);
+
+    const t = now / 1000;
+    if (room) {
+      for (const o of room.userData.targets) {
+        const y = o.base.y + Math.sin(t * 0.6 + o.phase) * 0.004;
+        o.t.position.y = y;
+        o.tie.geometry.attributes.position.setY(0, y); o.tie.geometry.attributes.position.needsUpdate = true;
+      }
+      const hf = room.userData.hopf;
+      hf.rotation.y = t * 0.12; hf.rotation.x = Math.sin(t * 0.07) * 0.4;
+    }
+    renderer.render(scene, camera);
+    drawPip();
+
+    frames++;
+    if (now - fpsT > 500) {
+      const fps = frames * 1000 / (now - fpsT); frames = 0; fpsT = now;
+      const f = v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1);
+      $('eye').textContent = 'x ' + f(eye.x) + '  y ' + f(eye.y) + '  z ' + (eye.z * 100).toFixed(1);
+      $('fps').textContent = Math.round(fps) + ' fps' + (mode === 'camera' ? ' · track ' + Math.round(trackFps) : '');
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
