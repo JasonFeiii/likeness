@@ -411,7 +411,7 @@ button:focus-visible { outline: 1px solid var(--beam); outline-offset: 4px; }
         Ldir = normalize(vec3(sp, 0.8));
       } else {
         // raking light: no band, the whole face lit from a low, slowly orbiting source
-        beam = 0.55 + 0.45 * smoothstep(-0.4, 0.8, dot(d, uDir));
+        beam = smoothstep(-0.15, 0.95, dot(d, uDir)) * 0.9;
         Ldir = normalize(vec3(uDir, 0.28));
       }
       // partial reveal: only some patches answer the light
@@ -420,7 +420,9 @@ button:focus-visible { outline: 1px solid var(--beam); outline-offset: 4px; }
 
       // ---- the face: luminance of the source, lit as a relief by the moving light
       vec2 wv = uv + (r) * 0.004;                   // a breath of the smoke in the image
-      float m = smoothstep(0.15, 0.85, blurB(wv, 6.0));
+      // soft, eaten-away edge: the face dissolves into the dark instead of ending at a cut line
+      float mb = 0.5 * (blurB(wv, 9.0) + blurB(wv, 22.0));
+      float m = smoothstep(0.25, 0.95, mb + fbm(d * 3.0 + uTime * 0.05) * 0.22);
       float L = lumAt(wv);
       float gx = lumAt(wv + vec2(uTexel.x * 1.5, 0.0)) - lumAt(wv - vec2(uTexel.x * 1.5, 0.0));
       float gy = lumAt(wv + vec2(0.0, uTexel.y * 1.5)) - lumAt(wv - vec2(0.0, uTexel.y * 1.5));
