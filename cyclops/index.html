@@ -111,6 +111,7 @@ button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); ou
   <label for="relief">Relief <input id="relief" type="range" min="40" max="300" step="5" value="140"><output id="rv">1.40×</output></label>
   <label for="sw">Screen width <input id="sw" type="range" min="20" max="80" step="1"><output id="swv"></output></label>
   <label class="toggle" for="live"><input id="live" type="checkbox" checked> Moving noise</label>
+  <label class="toggle" for="peek"><input id="peek" type="checkbox"> Peek</label>
   <button class="btn ghost" id="help" type="button">How to look</button>
 </div>
 
@@ -134,6 +135,8 @@ const CANON = {"v":[0.0,-3.41,5.98,0.0,-1.13,7.48,0.0,-2.09,6.06,-0.46,0.96,6.63
   $('sw').addEventListener('input', e => { cfg.screenCm = +e.target.value; $('swv').textContent = cfg.screenCm + ' cm'; store.set('sw', cfg.screenCm); });
   $('relief').addEventListener('input', e => { cfg.relief = e.target.value / 100; $('rv').textContent = cfg.relief.toFixed(2) + '×'; store.set('relief', cfg.relief); });
   $('live').addEventListener('change', e => { cfg.live = e.target.checked; });
+  // peek: tint the hidden shape, for anyone who has not fused the image yet
+  $('peek').addEventListener('change', e => { cfg.peek = e.target.checked; });
   document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b)); cfg.view = b.dataset.v;
   }));
@@ -352,7 +355,7 @@ const CANON = {"v":[0.0,-3.41,5.98,0.0,-1.13,7.48,0.0,-2.09,6.06,-0.46,0.96,6.63
   let seed = 1;
   // xorshift32 with 32-bit integer maths (a plain LCG in doubles loses its low bits and repeats)
   const rand = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
-  function stereogram(staticSeed) {
+  function stereogram(staticSeed, dBg) {
     const E = viewer.ipd, Z = viewer.z, ppm = pxPerM() / DOT, data = img.data;
     for (let y = 0; y < GH; y++) {
       seed = (Math.imul(y + 1, 2654435761) ^ (staticSeed ? 0x9e3779b9 : Math.imul((performance.now() * 37) | 0, 40503))) | 1;
@@ -373,7 +376,11 @@ const CANON = {"v":[0.0,-3.41,5.98,0.0,-1.13,7.48,0.0,-2.09,6.06,-0.46,0.96,6.63
         if (same[x] === x) { const r = rand(); c = r < 0.47 ? 0 : r < 0.9 ? 1 : r < 0.97 ? 2 : 3; } else c = row[same[x]];
         row[x] = c;
         const p = PAL[c], o = (base + x) * 4;
-        data[o] = p[0]; data[o+1] = p[1]; data[o+2] = p[2]; data[o+3] = 255;
+        if (cfg.peek) {
+          const lift = Math.max(0, Math.min(1, (dBg - depth[base + x]) / (dBg * 0.45)));
+          const m = 0.25 + 0.75 * lift;
+          data[o] = p[0] * m + 255 * lift * 0.25; data[o+1] = p[1] * m + 150 * lift * 0.25; data[o+2] = p[2] * m + 90 * lift * 0.2; data[o+3] = 255;
+        } else { data[o] = p[0]; data[o+1] = p[1]; data[o+2] = p[2]; data[o+3] = 255; }
       }
     }
     octx.putImageData(img, 0, 0);
@@ -391,7 +398,7 @@ const CANON = {"v":[0.0,-3.41,5.98,0.0,-1.13,7.48,0.0,-2.09,6.06,-0.46,0.96,6.63
       faceGeometry(t);
       const dBg = viewer.z * 0.55;                              // background plane: ~1/3 of eye distance apart on screen
       rasterise(dBg, cfg.view === 'cross' ? -1 : 1, cfg.relief);
-      stereogram(!live);
+      stereogram(!live, dBg);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#050606'; ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.imageSmoothingEnabled = false;
