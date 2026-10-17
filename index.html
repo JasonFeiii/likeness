@@ -1,3 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="In-browser 468-point face landmark detection, drawn faintly into a flowing WebGL field.">
 <title>Likeness</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,7 +31,9 @@
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
+[hidden] { display: none !important; }
 html, body { height: 100%; }
+body { margin: 0; }
 body {
   background: var(--ink);
   color: var(--fg);
@@ -220,6 +228,9 @@ footer {
   * { transition: none !important; animation: none !important; }
 }
 </style>
+</head>
+<body>
+
 
 <canvas id="flow" aria-hidden="true"></canvas>
 <canvas id="overlay" aria-hidden="true"></canvas>
@@ -877,3 +888,6 @@ footer {
   });
 })();
 </script>
+
+</body>
+</html>
