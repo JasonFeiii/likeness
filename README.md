@@ -1,6 +1,6 @@
 # Likeness
 
-In-browser face landmark detection (468 points) drawn into a flowing WebGL field.
+A dark room that only shows your face where a scanning light passes. Face landmarks (468 points) are detected in the browser and lit by moving bands, a wandering lamp and raking light.
 Everything runs locally with TensorFlow.js; photos and camera frames never leave the browser.
 
 - `index.html` — the whole app

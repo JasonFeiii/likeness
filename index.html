@@ -3,229 +3,108 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="In-browser 468-point face landmark detection, drawn faintly into a flowing WebGL field.">
+<meta name="description" content="Something is waiting in the dark. Let it see you.">
 <title>Likeness</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,400;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: the fluid field is the page. A face sits in the middle of it; copy and actions anchor bottom-left,
-   a live readout of the mesh anchors right. On phones the face rides high and both panels stack below.
-   Single deliberate dark look: the shader needs a dark ground, so colours are fixed, not theme-switched. */
+/* Layout: an almost black room. The face is the only lit thing, and only where a scanning light passes.
+   One whispered line + one action at the bottom; a sparse instrument HUD in the corners.
+   Single deliberate dark look: the effect depends on darkness, so colours are fixed, not theme-switched. */
 :root {
   color-scheme: dark;
-  --ink: #07090b;
-  --panel: rgba(9, 12, 15, 0.56);
-  --edge: rgba(220, 230, 232, 0.13);
-  --fg: #edeae4;
-  --fg-dim: rgba(237, 234, 228, 0.64);
-  --fg-faint: rgba(237, 234, 228, 0.40);
-  --accent: #ffb48f;
-  --accent-ink: #2b1207;
-  --field: rgba(255, 255, 255, 0.05);
-  --warn: #ffd27a;
-
-  --display: "Familjen Grotesk", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --body: "IBM Plex Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --void: #030405;
+  --fg: #dfe7e6;
+  --fg-dim: rgba(223, 231, 230, 0.55);
+  --fg-faint: rgba(223, 231, 230, 0.28);
+  --beam: #c9f2e8;
+  --edge: rgba(201, 242, 232, 0.18);
+  --serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
-
 [hidden] { display: none !important; }
 html, body { height: 100%; }
-body { margin: 0; }
 body {
-  background: var(--ink);
-  color: var(--fg);
-  font: 15px/1.5 var(--body);
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-}
-
-#flow, #overlay {
-  position: fixed; inset: 0;
-  width: 100%; height: 100%;
-  display: block;
-}
-#flow {
-  z-index: 0;
-  background:
-    radial-gradient(60% 50% at 50% 45%, #2b3a40 0%, transparent 70%),
-    radial-gradient(120% 80% at 10% 90%, #12202a 0%, transparent 60%),
-    var(--ink);
-}
-#overlay { z-index: 1; pointer-events: none; }
-
-.shell {
-  position: relative; z-index: 2;
-  min-height: 100%;
-  box-sizing: border-box;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
-  grid-template-rows: auto 1fr auto;
-  grid-template-areas:
-    "top top"
-    "intro readout"
-    "foot foot";
-  gap: 20px 28px;
-  padding-block: 20px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  max-width: 1400px; margin: 0 auto;
-  pointer-events: none;
-}
-.shell > * { pointer-events: auto; }
-
-header {
-  grid-area: top;
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-}
-.mark {
-  display: flex; align-items: center; gap: 10px;
-  font: 700 20px/1 var(--display);
-  letter-spacing: -0.01em;
-}
-.mark svg { width: 24px; height: 24px; }
-.pill {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 7px 11px; border-radius: 999px;
-  background: var(--panel); border: 1px solid var(--edge);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  font: 500 12px/1 var(--mono); color: var(--fg-dim);
-}
-.pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-faint); }
-.pill[data-state="ready"] i { background: #8fe3b5; box-shadow: 0 0 8px #8fe3b5; }
-.pill[data-state="loading"] i { background: var(--warn); animation: pulse 1.1s ease-in-out infinite; }
-.pill[data-state="error"] i { background: #ff7a6b; }
-@keyframes pulse { 50% { opacity: .3; } }
-
-.intro {
-  grid-area: intro;
-  align-self: end;
-  max-width: 460px;
-  display: grid; gap: 18px;
-}
-.eyebrow {
-  font: 500 11.5px/1 var(--mono);
-  letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--accent);
-}
-h1 {
   margin: 0;
-  font: 700 clamp(34px, 5.4vw, 60px)/0.98 var(--display);
-  letter-spacing: -0.03em;
-  text-wrap: balance;
-}
-.lede { margin: 0; color: var(--fg-dim); max-width: 42ch; }
-
-.actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.btn {
-  appearance: none; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 9px;
-  padding: 13px 18px; border-radius: 999px;
-  font: 600 14.5px/1 var(--body);
-  border: 1px solid var(--edge);
-  background: var(--panel); color: var(--fg);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  transition: transform .15s, background .2s, filter .2s;
-}
-.btn:hover { background: rgba(255,255,255,0.09); }
-.btn:active { transform: translateY(1px); }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-.btn.primary:hover { filter: brightness(1.06); background: var(--accent); }
-.btn svg { width: 16px; height: 16px; }
-.btn[disabled] { opacity: .5; cursor: progress; }
-button:focus-visible, input:focus-visible, label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
-
-.msg {
-  margin: 0; padding: 10px 13px; border-radius: 12px;
-  font-size: 13.5px; line-height: 1.45;
-  background: var(--panel); border: 1px solid var(--edge);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  background: var(--void);
   color: var(--fg);
-  max-width: 46ch;
+  font: 13px/1.5 var(--mono);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  cursor: default;
 }
+#flow, #glints { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#flow { z-index: 0; background: var(--void); }
+#glints { z-index: 1; pointer-events: none; }
 
-.readout {
-  grid-area: readout;
-  align-self: end;
-  padding: 18px 18px 16px;
-  border-radius: 20px;
-  background: var(--panel);
-  border: 1px solid var(--edge);
-  backdrop-filter: blur(20px) saturate(130%);
-  -webkit-backdrop-filter: blur(20px) saturate(130%);
-  display: grid; gap: 14px;
-  min-width: 0;
-}
-.readout h2 {
-  margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
-  font: 600 13px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-dim);
-}
-.readout h2 span { color: var(--fg); letter-spacing: 0; text-transform: none; font-weight: 500; }
-dl { margin: 0; display: grid; gap: 0; }
-.row {
-  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
-  padding: 8px 0;
-  border-top: 1px solid var(--edge);
-}
-.row dt { color: var(--fg-dim); font-size: 13px; }
-.row dt small { font: 400 11px/1 var(--mono); color: var(--fg-faint); margin-left: 6px; }
-.row dd {
-  margin: 0; font: 500 13.5px/1 var(--mono);
+.hud {
+  position: fixed; z-index: 2;
+  font: 400 11px/1.6 var(--mono);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--fg-faint);
   font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.pose { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.pose div {
-  padding: 10px 8px; border-radius: 12px;
-  background: var(--field); border: 1px solid var(--edge);
-  display: grid; gap: 6px; justify-items: center;
-}
-.pose b { font: 500 18px/1 var(--mono); font-variant-numeric: tabular-nums; }
-.pose span { font: 500 10.5px/1 var(--mono); color: var(--fg-faint); letter-spacing: 0.1em; text-transform: uppercase; }
-.bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; width: 64px; }
-.bar i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width .15s; }
-.dd-bar { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
-
-.controls { display: grid; gap: 12px; padding-top: 4px; border-top: 1px solid var(--edge); }
-.ctl { display: grid; gap: 8px; }
-.ctl > span { font: 500 11px/1 var(--mono); color: var(--fg-faint); letter-spacing: 0.1em; text-transform: uppercase; display: flex; justify-content: space-between; }
-input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
-.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 12px; background: var(--field); border: 1px solid var(--edge); }
-.seg button {
-  appearance: none; border: 0; cursor: pointer; border-radius: 9px;
-  padding: 8px 6px; font: 500 12.5px/1 var(--body);
-  background: transparent; color: var(--fg-dim);
-}
-.seg button[aria-pressed="true"] { background: rgba(255,255,255,0.11); color: var(--fg); }
-
-footer {
-  grid-area: foot;
-  display: flex; justify-content: space-between; gap: 8px 20px; flex-wrap: wrap;
-  font: 400 11.5px/1.4 var(--mono); color: var(--fg-faint);
-}
-
-.drop {
-  position: fixed; inset: 0; z-index: 5;
-  display: grid; place-items: center;
-  background: rgba(7, 9, 11, 0.6);
-  border: 2px dashed var(--accent);
-  font: 600 22px/1 var(--display);
   pointer-events: none;
 }
+.hud.tl { top: calc(18px + env(safe-area-inset-top, 0px)); left: max(18px, env(safe-area-inset-left, 0px)); }
+.hud.tr { top: calc(18px + env(safe-area-inset-top, 0px)); right: max(18px, env(safe-area-inset-right, 0px)); text-align: right; }
+.hud.bl { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: max(18px, env(safe-area-inset-left, 0px)); }
+.hud.br { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); right: max(18px, env(safe-area-inset-right, 0px)); text-align: right; }
+.hud b { color: var(--fg-dim); font-weight: 500; }
+.hud .live { color: var(--beam); }
 
-@media (max-width: 760px) {
-  .shell {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(44vh, auto) auto auto auto;
-    grid-template-areas: "top" "." "intro" "readout" "foot";
-  }
-  .intro, .readout { align-self: start; max-width: none; }
-  .pill .long { display: none; }
+.invite {
+  position: fixed; z-index: 3;
+  left: 50%; bottom: calc(12vh + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px));
+  display: grid; justify-items: center; gap: 22px;
+  text-align: center;
+  transition: opacity 1.6s ease, transform 1.6s ease;
+}
+.invite.gone { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
+.invite p {
+  margin: 0;
+  font: italic 400 clamp(24px, 4.2vw, 36px)/1.15 var(--serif);
+  color: var(--fg);
+  text-wrap: balance;
+  letter-spacing: 0.005em;
+}
+.invite p span { color: var(--fg-dim); }
+.row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.eye {
+  appearance: none; cursor: pointer;
+  padding: 13px 22px; border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: rgba(201, 242, 232, 0.06);
+  color: var(--beam);
+  font: 500 12px/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase;
+  transition: background .3s, border-color .3s, box-shadow .3s;
+}
+.eye:hover { background: rgba(201, 242, 232, 0.12); border-color: rgba(201, 242, 232, 0.4); box-shadow: 0 0 30px rgba(201, 242, 232, 0.12); }
+.eye[disabled] { opacity: .45; cursor: progress; }
+.quiet {
+  appearance: none; border: 0; background: none; cursor: pointer; padding: 6px 2px;
+  color: var(--fg-faint);
+  font: 400 11px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  border-bottom: 1px solid transparent;
+}
+.quiet:hover { color: var(--fg-dim); border-bottom-color: var(--fg-faint); }
+.note { margin: 0; font: 400 12px/1.5 var(--mono); color: var(--fg-dim); max-width: 46ch; letter-spacing: 0.02em; }
+
+.close {
+  position: fixed; z-index: 3;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+}
+button:focus-visible { outline: 1px solid var(--beam); outline-offset: 4px; }
+
+@media (max-width: 560px) {
+  .hud.bl, .hud.br { display: none; }
+  .invite { bottom: calc(9vh + env(safe-area-inset-bottom, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
+  * { transition: none !important; }
 }
 </style>
 </head>
@@ -233,85 +112,28 @@ footer {
 
 
 <canvas id="flow" aria-hidden="true"></canvas>
-<canvas id="overlay" aria-hidden="true"></canvas>
+<canvas id="glints" aria-hidden="true"></canvas>
 
-<div class="shell">
-  <header>
-    <div class="mark">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <ellipse cx="12" cy="12" rx="8" ry="10" stroke="#edeae4" stroke-width="1.6"/>
-        <circle cx="9" cy="10" r="1.2" fill="#ffb48f"/><circle cx="15" cy="10" r="1.2" fill="#ffb48f"/>
-        <path d="M9 15.5c1.8 1.2 4.2 1.2 6 0" stroke="#ffb48f" stroke-width="1.6" stroke-linecap="round"/>
-      </svg>
-      Likeness
-    </div>
-    <div class="pill" id="pill" data-state="loading" role="status"><i></i><span id="pill-text">Loading face model</span></div>
-  </header>
+<div class="hud tl">Likeness<br><span id="hud-state">Dark room</span></div>
+<div class="hud tr"><span id="hud-pass">Pass 00</span><br><span id="hud-pts">— / 468</span></div>
+<div class="hud bl" id="hud-pose">Yaw +0°<br>Pitch +0°</div>
+<div class="hud br">Nothing leaves<br>this browser</div>
 
-  <section class="intro" aria-labelledby="h1">
-    <div class="eyebrow">Face mesh · 468 landmarks</div>
-    <h1 id="h1">A face, surfacing in the current.</h1>
-    <p class="lede">Upload a portrait or turn on your camera. Likeness finds 468 points on the face in your browser and draws them back into the moving field.</p>
-    <div class="actions">
-      <label class="btn primary" for="file">
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 11V2.5M4.5 6 8 2.5 11.5 6M2.5 11v2.5h11V11" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Upload a photo
-        <input id="file" type="file" accept="image/*" hidden>
-      </label>
-      <button class="btn" id="cam" type="button">
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="4" width="9.5" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="m11 7 3.5-2v6L11 9" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-        <span id="cam-label">Use camera</span>
-      </button>
-      <button class="btn" id="reset" type="button" hidden>Back to reference</button>
-    </div>
-    <p class="msg" id="msg" hidden></p>
-  </section>
+<section class="invite" id="invite" aria-live="polite">
+  <p>Something is waiting in the dark.<br><span>Let it see you.</span></p>
+  <div class="row">
+    <button class="eye" id="cam" type="button" disabled>Open the camera</button>
+    <label class="quiet" for="file" tabindex="0">or offer a photo<input id="file" type="file" accept="image/*" hidden></label>
+  </div>
+  <p class="note" id="note" hidden></p>
+</section>
 
-  <aside class="readout" aria-label="Mesh readout">
-    <h2>Readout <span id="src">Reference face</span></h2>
-    <div class="pose" aria-label="Head pose in degrees">
-      <div><b id="yaw">0°</b><span>Yaw</span></div>
-      <div><b id="pitch">0°</b><span>Pitch</span></div>
-      <div><b id="roll">0°</b><span>Roll</span></div>
-    </div>
-    <dl>
-      <div class="row"><dt>Landmarks</dt><dd id="n">468</dd></div>
-      <div class="row"><dt>Face confidence</dt><dd id="conf">—</dd></div>
-      <div class="row"><dt>Inference</dt><dd id="ms">—</dd></div>
-      <div class="row"><dt>Left eye <small>EAR</small></dt><dd class="dd-bar"><span class="bar"><i id="earl-bar"></i></span><span id="earl">—</span></dd></div>
-      <div class="row"><dt>Right eye <small>EAR</small></dt><dd class="dd-bar"><span class="bar"><i id="earr-bar"></i></span><span id="earr">—</span></dd></div>
-      <div class="row"><dt>Mouth <small>MAR</small></dt><dd class="dd-bar"><span class="bar"><i id="mar-bar"></i></span><span id="mar">—</span></dd></div>
-    </dl>
-    <div class="controls">
-      <label class="ctl" for="reveal"><span>Face in the field <em id="reveal-v">60%</em></span>
-        <input id="reveal" type="range" min="0" max="100" value="60">
-      </label>
-      <div class="ctl"><span>Mesh overlay</span>
-        <div class="seg" role="group" aria-label="Mesh overlay">
-          <button type="button" data-ov="points" aria-pressed="true">Points</button>
-          <button type="button" data-ov="contours" aria-pressed="false">Contours</button>
-          <button type="button" data-ov="off" aria-pressed="false">Off</button>
-        </div>
-      </div>
-    </div>
-  </aside>
-
-  <footer>
-    <span>Runs entirely in your browser. Photos and video never leave this page.</span>
-    <span>TensorFlow.js · MediaPipe Face Mesh &amp; BlazeFace weights (Apache-2.0)</span>
-  </footer>
-</div>
-
-<div class="drop" id="drop" hidden>Drop a portrait</div>
+<button class="quiet close" id="close" type="button" hidden>Close the eye</button>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 <script>
 (() => {
-  /* ======================================================================
-     Reference face: 468 normalised landmarks (x, y, z) used before any input.
-     ====================================================================== */
   const GHOST = [0.014,0.288,-0.159,0.004,0.117,-0.409,0.008,0.164,-0.204,-0.062,-0.138,-0.337,0.003,0.044,-0.443,0.001,-0.06,-0.424,-0.003,-0.312,-0.254,-0.519,-0.361,0.039,-0.009,-0.486,-0.218,-0.013,-0.576,-0.246,-0.025,-0.9,-0.223,0.016,0.318,-0.145,0.018,0.331,-0.123,0.02,0.328,-0.091,0.015,0.444,-0.049,0.016,0.471,-0.06,0.018,0.503,-0.075,0.019,0.54,-0.061,0.02,0.607,0.009,0.006,0.149,-0.367,-0.067,0.131,-0.263,-0.776,-0.613,0.333,-0.297,-0.3,-0.028,-0.369,-0.296,-0.024,-0.441,-0.299,-0.005,-0.544,-0.336,0.053,-0.239,-0.313,-0.021,-0.422,-0.465,-0.069,-0.342,-0.459,-0.069,-0.495,-0.453,-0.046,-0.542,-0.429,-0.015,-0.595,-0.294,0.096,-0.261,0.684,0.131,-0.55,-0.377,0.06,-0.797,-0.326,0.412,-0.675,-0.335,0.161,-0.375,-0.018,-0.064,-0.102,0.271,-0.152,-0.088,0.322,-0.109,-0.214,0.267,-0.101,-0.282,0.267,-0.024,-0.171,0.309,-0.07,-0.232,0.299,-0.001,-0.357,0.374,0.133,-0.06,0.113,-0.403,-0.069,0.04,-0.434,-0.649,-0.497,-0.009,-0.217,-0.178,-0.095,-0.238,0.05,-0.222,-0.24,0.007,-0.204,-0.593,-0.049,0.03,-0.066,-0.055,-0.4,-0.491,-0.565,-0.142,-0.586,-0.545,-0.084,-0.717,-0.725,0.174,-0.168,-0.503,-0.198,-0.27,-0.436,-0.045,-0.42,0.285,0.132,-0.713,0.299,0.709,-0.185,0.09,-0.189,-0.121,0.118,-0.19,-0.366,0.284,0.134,-0.328,0.291,0.116,-0.627,-0.59,-0.056,-0.243,0.068,-0.177,-0.355,-0.557,-0.182,-0.371,-0.613,-0.208,-0.444,-0.872,-0.124,-0.671,-0.658,0.043,-0.4,-0.744,-0.17,-0.69,-0.53,0.047,-0.732,-0.566,0.182,-0.096,0.305,-0.137,-0.19,0.295,-0.085,-0.257,0.284,-0.018,-0.167,0.101,-0.171,-0.348,0.286,0.124,-0.307,0.345,0.089,-0.316,0.294,0.114,-0.142,0.094,-0.296,-0.218,0.29,0.009,-0.155,0.304,-0.041,-0.077,0.318,-0.078,-0.098,0.592,0.017,-0.094,0.523,-0.05,-0.092,0.487,-0.062,-0.089,0.456,-0.047,-0.082,0.434,-0.037,-0.226,0.378,0.041,-0.24,0.384,0.033,-0.255,0.398,0.028,-0.268,0.417,0.045,-0.336,0.209,-0.017,-0.785,-0.042,0.751,0.006,0.158,-0.262,-0.268,0.347,0.09,-0.288,0.344,0.086,-0.094,0.152,-0.185,-0.221,0.103,-0.113,-0.107,0.136,-0.19,-0.293,-0.148,-0.065,-0.416,-0.114,-0.041,-0.254,0.028,-0.156,-0.615,-0.815,0.015,-0.568,-0.722,-0.072,-0.519,-0.621,-0.14,-0.293,0.46,0.098,-0.197,-0.592,-0.238,-0.223,-0.744,-0.225,-0.254,-0.896,-0.204,-0.506,-0.312,0.025,-0.668,-0.249,0.142,-0.205,-0.327,-0.014,-0.609,-0.41,0.048,-0.166,-0.216,-0.127,-0.189,0.043,-0.3,-0.743,-0.205,0.229,-0.618,-0.208,0.083,-0.528,-0.185,0.02,-0.391,-0.187,-0.015,-0.289,-0.207,-0.033,-0.216,-0.232,-0.058,-0.072,-0.296,-0.222,-0.743,-0.074,0.23,-0.666,-0.422,0.077,-0.034,0.144,-0.362,-0.215,-0.107,-0.12,-0.811,-0.34,0.646,-0.163,-0.263,-0.075,-0.263,0.023,-0.078,-0.57,-0.37,0.076,-0.191,-0.01,-0.276,-0.764,0.123,0.747,-0.211,-0.351,0.001,-0.129,-0.038,-0.354,-0.576,0.475,0.372,-0.557,0.561,0.503,-0.8,-0.049,0.493,-0.667,0.376,0.435,-0.766,-0.456,0.315,-0.271,0.766,0.179,-0.025,0.153,-0.258,-0.283,-0.068,-0.086,-0.732,-0.323,0.234,-0.438,-0.338,-0.002,-0.373,-0.334,-0.018,-0.323,0.35,0.103,-0.741,0.061,0.278,-0.131,0.88,0.2,-0.355,0.751,0.339,-0.449,0.669,0.414,-0.019,-0.739,-0.241,0.027,0.9,0.181,-0.312,-0.337,-0.022,-0.255,-0.344,-0.012,-0.223,-0.347,0.001,-0.715,-0.439,0.148,-0.28,-0.409,-0.029,-0.345,-0.434,-0.043,-0.41,-0.44,-0.04,-0.475,-0.427,-0.023,-0.514,-0.406,0.002,-0.806,-0.493,0.504,-0.485,-0.349,0.02,0.011,0.203,-0.172,-0.263,0.189,-0.083,-0.186,0.087,-0.22,-0.106,0.196,-0.162,-0.006,-0.404,-0.208,-0.471,0.58,0.325,-0.373,0.672,0.258,-0.136,0.829,0.109,-0.639,0.447,0.609,-0.233,-0.373,-0.012,-0.119,-0.182,-0.23,0.026,0.851,0.094,-0.254,0.826,0.257,-0.781,0.102,0.507,-0.162,0.41,-0.002,-0.174,0.424,-0.011,-0.183,0.449,-0.018,-0.19,0.482,-0.002,-0.21,0.537,0.054,-0.291,0.288,0.06,-0.315,0.28,0.061,-0.337,0.267,0.058,-0.397,0.237,0.058,-0.656,0.098,0.136,-0.118,-0.259,-0.17,-0.159,-0.394,-0.057,-0.203,-0.386,-0.028,-0.272,0.281,0.067,-0.659,0.267,0.282,-0.099,-0.394,-0.156,-0.235,0.602,0.095,-0.001,-0.147,-0.363,-0.068,-0.213,-0.288,-0.002,-0.227,-0.305,-0.169,-0.077,-0.218,0.025,0.773,0.047,0.023,0.681,0.03,-0.111,0.663,0.048,-0.406,0.413,0.172,-0.323,0.071,-0.047,-0.328,0.516,0.142,-0.499,0.052,-0.019,-0.397,0.13,-0.009,-0.561,0.15,0.069,-0.128,0.752,0.065,-0.214,-0.05,-0.158,-0.458,0.485,0.238,-0.359,0.588,0.198,-0.474,0.309,0.154,-0.724,0.181,0.327,-0.563,0.34,0.215,-0.74,0.245,0.503,-0.46,0.191,0.052,-0.164,-0.144,-0.17,-0.166,0.081,-0.314,-0.217,0.078,-0.228,-0.133,0.042,-0.371,-0.222,-0.45,-0.085,-0.344,-0.488,-0.102,-0.447,-0.496,-0.096,-0.531,-0.487,-0.066,-0.586,-0.459,-0.018,-0.613,-0.351,0.106,-0.804,-0.189,0.456,-0.553,-0.267,0.062,-0.475,-0.247,0.02,-0.379,-0.245,-0.009,-0.289,-0.257,-0.023,-0.222,-0.275,-0.029,-0.178,-0.292,-0.037,-0.797,-0.193,0.722,-0.215,0.085,-0.189,-0.118,-0.112,-0.282,-0.113,0.097,-0.369,-0.072,0.127,-0.333,-0.113,0.103,-0.332,-0.197,0.101,-0.159,-0.058,0.138,-0.352,-0.049,0.144,-0.26,-0.185,-0.344,-0.01,-0.145,-0.326,-0.053,-0.124,-0.312,-0.104,-0.535,-0.389,0.028,-0.572,-0.404,0.029,0.062,-0.138,-0.337,0.519,-0.362,0.046,0.08,0.132,-0.261,0.755,-0.603,0.343,0.299,-0.305,-0.024,0.372,-0.301,-0.018,0.444,-0.301,0.001,0.544,-0.337,0.06,0.24,-0.316,-0.018,0.408,-0.465,-0.063,0.327,-0.46,-0.064,0.481,-0.453,-0.038,0.531,-0.428,-0.008,0.597,-0.292,0.103,0.31,0.687,0.134,0.548,-0.377,0.068,0.797,-0.317,0.422,0.673,-0.331,0.17,0.391,-0.014,-0.059,0.131,0.275,-0.151,0.125,0.327,-0.109,0.25,0.275,-0.099,0.323,0.278,-0.021,0.211,0.317,-0.069,0.276,0.309,-0.0,0.406,0.383,0.137,0.068,0.113,-0.402,0.074,0.04,-0.433,0.631,-0.495,-0.001,0.22,-0.179,-0.092,0.251,0.052,-0.219,0.252,0.009,-0.2,0.611,-0.041,0.037,0.068,-0.054,-0.4,0.466,-0.564,-0.135,0.566,-0.543,-0.076,0.686,-0.718,0.183,0.147,-0.503,-0.195,0.257,-0.437,-0.041,0.469,0.297,0.137,0.747,0.311,0.715,0.201,0.092,-0.185,0.139,0.12,-0.189,0.414,0.299,0.138,0.376,0.306,0.121,0.603,-0.587,-0.048,0.26,0.072,-0.173,0.33,-0.557,-0.177,0.343,-0.612,-0.202,0.397,-0.868,-0.118,0.643,-0.653,0.051,0.362,-0.742,-0.166,0.672,-0.526,0.057,0.712,-0.558,0.191,0.129,0.309,-0.136,0.229,0.302,-0.085,0.3,0.294,-0.015,0.185,0.103,-0.17,0.397,0.302,0.129,0.349,0.358,0.093,0.362,0.307,0.118,0.152,0.094,-0.295,0.263,0.301,0.01,0.197,0.312,-0.04,0.117,0.323,-0.078,0.14,0.596,0.018,0.134,0.528,-0.05,0.128,0.491,-0.061,0.121,0.461,-0.046,0.112,0.438,-0.037,0.262,0.388,0.044,0.276,0.395,0.035,0.294,0.408,0.029,0.308,0.427,0.048,0.371,0.219,-0.013,0.801,-0.029,0.762,0.307,0.359,0.093,0.329,0.356,0.089,0.114,0.154,-0.183,0.243,0.107,-0.112,0.126,0.138,-0.189,0.299,-0.148,-0.061,0.428,-0.111,-0.036,0.27,0.031,-0.153,0.574,-0.809,0.023,0.533,-0.718,-0.065,0.491,-0.619,-0.132,0.339,0.47,0.101,0.169,-0.591,-0.236,0.184,-0.742,-0.221,0.204,-0.893,-0.2,0.508,-0.313,0.032,0.674,-0.244,0.151,0.203,-0.33,-0.01,0.6,-0.408,0.056,0.166,-0.216,-0.124,0.197,0.044,-0.297,0.751,-0.198,0.239,0.628,-0.206,0.091,0.538,-0.183,0.026,0.398,-0.187,-0.009,0.293,-0.209,-0.028,0.217,-0.234,-0.056,0.066,-0.296,-0.221,0.76,-0.065,0.239,0.656,-0.419,0.086,0.044,0.146,-0.362,0.221,-0.106,-0.117,0.811,-0.328,0.656,0.162,-0.264,-0.072,0.28,0.026,-0.075,0.567,-0.37,0.084,0.198,-0.01,-0.274,0.789,0.136,0.755,0.209,-0.354,0.005,0.132,-0.038,-0.351,0.618,0.485,0.379,0.602,0.569,0.508,0.816,-0.037,0.503,0.705,0.388,0.442,0.756,-0.447,0.325,0.321,0.769,0.181,0.037,0.153,-0.257,0.293,-0.065,-0.083,0.733,-0.317,0.243,0.438,-0.342,0.005,0.373,-0.339,-0.013,0.368,0.362,0.106,0.765,0.074,0.286,0.184,0.882,0.201,0.404,0.757,0.342,0.496,0.676,0.418,0.313,-0.342,-0.017,0.255,-0.349,-0.008,0.222,-0.351,0.005,0.705,-0.433,0.157,0.277,-0.409,-0.024,0.343,-0.433,-0.037,0.408,-0.438,-0.035,0.473,-0.426,-0.016,0.512,-0.404,0.01,0.795,-0.482,0.513,0.485,-0.351,0.027,0.292,0.195,-0.079,0.2,0.089,-0.218,0.129,0.199,-0.161,0.517,0.586,0.33,0.421,0.677,0.262,0.188,0.831,0.11,0.68,0.457,0.617,0.23,-0.375,-0.008,0.118,-0.182,-0.228,0.305,0.831,0.258,0.806,0.115,0.515,0.194,0.417,-0.001,0.207,0.433,-0.009,0.22,0.456,-0.016,0.23,0.489,-0.001,0.254,0.545,0.056,0.338,0.301,0.064,0.361,0.293,0.066,0.382,0.281,0.062,0.439,0.249,0.063,0.683,0.11,0.143,0.114,-0.258,-0.168,0.149,-0.395,-0.054,0.195,-0.388,-0.023,0.319,0.295,0.069,0.693,0.279,0.29,0.088,-0.394,-0.154,0.282,0.607,0.097,0.065,-0.212,-0.286,0.174,-0.077,-0.215,0.157,0.667,0.049,0.453,0.419,0.176,0.345,0.075,-0.044,0.376,0.522,0.145,0.522,0.061,-0.013,0.424,0.138,-0.004,0.591,0.161,0.076,0.18,0.755,0.067,0.223,-0.049,-0.154,0.503,0.492,0.244,0.407,0.593,0.201,0.519,0.319,0.16,0.753,0.194,0.334,0.604,0.35,0.222,0.771,0.257,0.511,0.497,0.203,0.058,0.167,-0.144,-0.168,0.176,0.082,-0.312,0.231,0.079,-0.225,0.139,0.043,-0.369,0.206,-0.451,-0.082,0.324,-0.489,-0.097,0.428,-0.497,-0.09,0.514,-0.486,-0.058,0.573,-0.457,-0.011,0.61,-0.35,0.115,0.812,-0.179,0.467,0.557,-0.267,0.069,0.481,-0.248,0.027,0.384,-0.248,-0.003,0.292,-0.26,-0.018,0.224,-0.277,-0.027,0.178,-0.295,-0.034,0.805,-0.181,0.732,0.233,0.088,-0.186,0.12,-0.111,-0.28,0.121,0.098,-0.369,0.082,0.128,-0.332,0.122,0.104,-0.331,0.217,0.105,-0.157,0.068,0.138,-0.351,0.063,0.146,-0.259,0.181,-0.346,-0.007,0.141,-0.328,-0.05,0.119,-0.312,-0.102,0.534,-0.388,0.036,0.564,-0.404,0.038];
-
   const C = {
     oval: [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109],
     lipsO: [61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185],
@@ -323,33 +145,15 @@ footer {
     nose: [168,6,197,195,5,4,1]
   };
   const CLOSED = { oval: 1, lipsO: 1, lipsI: 1, eyeR: 1, eyeL: 1 };
-
-  /* ---------------- DOM ---------------- */
   const $ = id => document.getElementById(id);
-  const pill = $('pill'), pillText = $('pill-text'), msg = $('msg');
-  function setStatus(state, text) { pill.dataset.state = state; pillText.textContent = text; }
-  function say(text) { msg.textContent = text; msg.hidden = !text; }
+  const note = t => { $('note').textContent = t; $('note').hidden = !t; };
 
-  let overlayMode = 'points';
-  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
-    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
-    overlayMode = b.dataset.ov;
-  }));
-  let reveal = 0.6;
-  $('reveal').addEventListener('input', e => { reveal = e.target.value / 100; $('reveal-v').textContent = e.target.value + '%'; });
-
-  /* ======================================================================
-     Face model (TF.js graph models published next to this page)
-     ====================================================================== */
+  /* ======================= face model ======================= */
   let detector = null, mesher = null;
-  const ANCHORS = (() => {
-    const a = [];
-    for (const [stride, n] of [[8, 2], [16, 6]]) {
-      const f = 128 / stride;
-      for (let y = 0; y < f; y++) for (let x = 0; x < f; x++) for (let k = 0; k < n; k++) a.push([(x + 0.5) / f, (y + 0.5) / f]);
-    }
-    return a;
-  })();
+  const ANCHORS = (() => { const a = [];
+    for (const [stride, n] of [[8, 2], [16, 6]]) { const f = 128 / stride;
+      for (let y = 0; y < f; y++) for (let x = 0; x < f; x++) for (let k = 0; k < n; k++) a.push([(x + .5) / f, (y + .5) / f]); }
+    return a; })();
   const detCanvas = document.createElement('canvas'); detCanvas.width = detCanvas.height = 128;
   const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
   const cropCanvas = document.createElement('canvas'); cropCanvas.width = cropCanvas.height = 192;
@@ -357,325 +161,198 @@ footer {
 
   async function loadModels() {
     if (!window.tf) throw new Error('TensorFlow.js did not load.');
-    try { await tf.setBackend('webgl'); } catch (e) { /* falls back to cpu */ }
+    try { await tf.setBackend('webgl'); } catch (e) {}
     await tf.ready();
-    // each model ships as one JSON file: graph + weight specs + base64 weights
     const loadPacked = async url => {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Could not fetch ' + url + ' (' + res.status + ')');
-      const j = await res.json();
-      const bin = atob(j.weightData), buf = new Uint8Array(bin.length);
+      const res = await fetch(url); if (!res.ok) throw new Error(url + ' ' + res.status);
+      const j = await res.json(); const bin = atob(j.weightData), buf = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
       return tf.loadGraphModel(tf.io.fromMemory({ format: j.format, modelTopology: j.modelTopology, weightSpecs: j.weightSpecs, weightData: buf.buffer, signature: j.signature }));
     };
-    [detector, mesher] = await Promise.all([
-      loadPacked('models/facemesh-detection-short.packed.json'),
-      loadPacked('models/facemesh.packed.json')
-    ]);
-    // warm up shaders so the first real frame is fast
+    [detector, mesher] = await Promise.all([loadPacked('models/facemesh-detection-short.packed.json'), loadPacked('models/facemesh.packed.json')]);
     tf.tidy(() => { detector.execute(tf.zeros([1, 128, 128, 3])); mesher.execute(tf.zeros([1, 192, 192, 3]), ['Identity_2', 'Identity_1']); });
   }
-
-  // BlazeFace short-range: [1, 896, 17] = score logit, then box(4) + 6 keypoints(12)
   async function detect(src, sw, sh) {
-    const s = 128 / Math.max(sw, sh);
-    const dw = sw * s, dh = sh * s, ox = (128 - dw) / 2, oy = (128 - dh) / 2;
-    detCtx.fillStyle = '#000'; detCtx.fillRect(0, 0, 128, 128);
-    detCtx.drawImage(src, ox, oy, dw, dh);
+    const s = 128 / Math.max(sw, sh), dw = sw * s, dh = sh * s, ox = (128 - dw) / 2, oy = (128 - dh) / 2;
+    detCtx.fillStyle = '#000'; detCtx.fillRect(0, 0, 128, 128); detCtx.drawImage(src, ox, oy, dw, dh);
     const out = tf.tidy(() => detector.execute(tf.browser.fromPixels(detCanvas).toFloat().div(127.5).sub(1).expandDims(0)));
     const d = await out.data(); out.dispose();
-    let best = -1, bestS = -1e9;
-    for (let i = 0; i < 896; i++) { const v = d[i * 17]; if (v > bestS) { bestS = v; best = i; } }
-    const score = 1 / (1 + Math.exp(-Math.max(-100, Math.min(100, bestS))));
-    if (score < 0.55) return null;
-    const r = i => d[best * 17 + 1 + i];
-    const [ax, ay] = ANCHORS[best];
-    const toSrc = (u, v) => [((u * 128) - ox) / s, ((v * 128) - oy) / s];
+    let best = -1, bs = -1e9; for (let i = 0; i < 896; i++) { const v = d[i * 17]; if (v > bs) { bs = v; best = i; } }
+    const score = 1 / (1 + Math.exp(-Math.max(-100, Math.min(100, bs)))); if (score < 0.55) return null;
+    const r = i => d[best * 17 + 1 + i], [ax, ay] = ANCHORS[best];
+    const toSrc = (u, v) => [(u * 128 - ox) / s, (v * 128 - oy) / s];
     const [cx, cy] = toSrc(r(0) / 128 + ax, r(1) / 128 + ay);
-    const size = Math.max(r(2), r(3)) / s;
     const eR = toSrc(r(4) / 128 + ax, r(5) / 128 + ay), eL = toSrc(r(6) / 128 + ax, r(7) / 128 + ay);
-    return { cx, cy, size: size * 1.5, ang: Math.atan2(eL[1] - eR[1], eL[0] - eR[0]), score };
+    return { cx, cy, size: Math.max(r(2), r(3)) / s * 1.5, ang: Math.atan2(eL[1] - eR[1], eL[0] - eR[0]), score };
   }
-
-  // Face Mesh on a rotated, square crop; returns 468 points in source pixels.
   async function landmarks(src, roi) {
     const sc = roi.size / 192;
-    cropCtx.setTransform(1, 0, 0, 1, 0, 0);
-    cropCtx.fillStyle = '#000'; cropCtx.fillRect(0, 0, 192, 192);
+    cropCtx.setTransform(1, 0, 0, 1, 0, 0); cropCtx.fillStyle = '#000'; cropCtx.fillRect(0, 0, 192, 192);
     cropCtx.translate(96, 96); cropCtx.rotate(-roi.ang); cropCtx.scale(1 / sc, 1 / sc); cropCtx.translate(-roi.cx, -roi.cy);
-    cropCtx.drawImage(src, 0, 0);
-    cropCtx.setTransform(1, 0, 0, 1, 0, 0);
+    cropCtx.drawImage(src, 0, 0); cropCtx.setTransform(1, 0, 0, 1, 0, 0);
     const outs = tf.tidy(() => mesher.execute(tf.browser.fromPixels(cropCanvas).toFloat().div(255).expandDims(0), ['Identity_2', 'Identity_1']));
     const [m, f] = await Promise.all(outs.map(t => t.data())); outs.forEach(t => t.dispose());
-    const c = Math.cos(roi.ang), s = Math.sin(roi.ang);
-    const pts = new Float32Array(468 * 3);
-    for (let i = 0; i < 468; i++) {
-      const u = (m[i * 3] - 96) * sc, v = (m[i * 3 + 1] - 96) * sc;
-      pts[i * 3] = roi.cx + c * u - s * v;
-      pts[i * 3 + 1] = roi.cy + s * u + c * v;
-      pts[i * 3 + 2] = m[i * 3 + 2] * sc;
-    }
+    const c = Math.cos(roi.ang), s = Math.sin(roi.ang), pts = new Float32Array(468 * 3);
+    for (let i = 0; i < 468; i++) { const u = (m[i*3] - 96) * sc, v = (m[i*3+1] - 96) * sc;
+      pts[i*3] = roi.cx + c * u - s * v; pts[i*3+1] = roi.cy + s * u + c * v; pts[i*3+2] = m[i*3+2] * sc; }
     return { pts, flag: f[0] };
   }
-
   function roiFromMesh(pts) {
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    for (let i = 0; i < 468; i++) { const x = pts[i*3], y = pts[i*3+1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-    return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, size: Math.max(x1 - x0, y1 - y0) * 1.55,
-             ang: Math.atan2(pts[263*3+1] - pts[33*3+1], pts[263*3] - pts[33*3]) };
+    for (let i = 0; i < 468; i++) { const x = pts[i*3], y = pts[i*3+1]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, size: Math.max(x1 - x0, y1 - y0) * 1.55, ang: Math.atan2(pts[263*3+1] - pts[33*3+1], pts[263*3] - pts[33*3]) };
+  }
+  function pose(pts) {
+    const P = i => [pts[i*3], pts[i*3+1]];
+    const eR = P(33), eL = P(263), roll = Math.atan2(eL[1] - eR[1], eL[0] - eR[0]);
+    const c = Math.cos(-roll), s = Math.sin(-roll), rot = p => [c * p[0] - s * p[1], s * p[0] + c * p[1]];
+    const n = rot(P(1)), cr = rot(P(234)), cl = rot(P(454)), br = rot(P(168)), ch = rot(P(152));
+    const yaw = Math.asin(Math.max(-1, Math.min(1, (n[0] - (cl[0] + cr[0]) / 2) / (((cl[0] - cr[0]) / 2) || 1))));
+    const pitch = Math.asin(Math.max(-1, Math.min(1, ((n[1] - br[1]) / ((ch[1] - br[1]) || 1) - 0.40) * 3.2)));
+    return { yaw: Math.round(yaw * 57.3), pitch: Math.round(pitch * 57.3) };
   }
 
-  /* ======================================================================
-     Measurements
-     ====================================================================== */
-  const P = (pts, i) => [pts[i*3], pts[i*3+1], pts[i*3+2]];
-  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-  const deg = r => Math.round(r * 180 / Math.PI);
-  function measure(pts) {
-    const eyeR = P(pts, 33), eyeL = P(pts, 263);
-    const roll = Math.atan2(eyeL[1] - eyeR[1], eyeL[0] - eyeR[0]);
-    const c = Math.cos(-roll), s = Math.sin(-roll);
-    const rot = p => [c * p[0] - s * p[1], s * p[0] + c * p[1]];
-    const nose = rot(P(pts, 1)), cheekR = rot(P(pts, 234)), cheekL = rot(P(pts, 454));
-    const brow = rot(P(pts, 168)), chin = rot(P(pts, 152));
-    const half = (cheekL[0] - cheekR[0]) / 2 || 1;
-    const yawN = Math.max(-1, Math.min(1, (nose[0] - (cheekL[0] + cheekR[0]) / 2) / half));
-    const pr = (nose[1] - brow[1]) / ((chin[1] - brow[1]) || 1);
-    const pitch = Math.max(-1, Math.min(1, (pr - 0.40) * 3.2));
-    const ear = (a, b, h1, h2) => dist(P(pts, a), P(pts, b)) / (dist(P(pts, h1), P(pts, h2)) || 1);
-    return {
-      yaw: deg(Math.asin(yawN)), pitch: deg(Math.asin(pitch)), roll: deg(roll),
-      earR: ear(159, 145, 33, 133), earL: ear(386, 374, 263, 362),
-      mar: dist(P(pts, 13), P(pts, 14)) / (dist(P(pts, 61), P(pts, 291)) || 1)
-    };
-  }
-  let lastUi = 0;
-  function renderReadout(m, conf, ms, srcLabel, now) {
-    if (now - lastUi < 120) return; lastUi = now;
-    $('src').textContent = srcLabel;
-    const sign = v => (v > 0 ? '+' : '') + v + '°';
-    $('yaw').textContent = sign(m.yaw); $('pitch').textContent = sign(m.pitch); $('roll').textContent = sign(m.roll);
-    $('conf').textContent = conf == null ? 'reference' : (conf * 100).toFixed(1) + '%';
-    $('ms').textContent = ms == null ? '—' : ms.toFixed(0) + ' ms';
-    const bar = (id, v, max) => { $(id).textContent = v.toFixed(2); $(id + '-bar').style.width = Math.min(100, v / max * 100) + '%'; };
-    bar('earl', m.earL, 0.4); bar('earr', m.earR, 0.4); bar('mar', m.mar, 0.8);
-  }
-
-  /* ======================================================================
-     Sources: reference face, photo, camera
-     ====================================================================== */
-  const state = {
-    mode: 'ghost',          // 'ghost' | 'photo' | 'camera'
-    src: null, sw: 0, sh: 0, mirror: false,
-    pts: null,              // landmarks in source pixels
-    shown: null,            // smoothed landmarks in screen pixels
-    conf: null, ms: null,
-    roi: null, busy: false,
-    blend: 0                // 0 = reference face, 1 = real face
-  };
+  /* ======================= sources ======================= */
+  const state = { mode: 'ghost', src: null, sw: 0, sh: 0, mirror: false, pts: null, shown: null, roi: null, busy: false, blend: 0 };
   let stream = null;
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
 
-  function toGhost() {
-    stopCamera();
-    state.mode = 'ghost'; state.src = null; state.pts = null; state.conf = null; state.ms = null;
-    $('reset').hidden = true;
-    say('');
-  }
-
-  $('reset').addEventListener('click', toGhost);
-
-  async function usePhoto(file) {
-    if (!file || !file.type.startsWith('image/')) { say('That file is not an image. Try a JPG, PNG or HEIC portrait.'); return; }
-    if (!mesher) { say('The face model is still loading. Try again in a moment.'); return; }
-    stopCamera();
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = async () => {
-      // cap very large photos so detection stays fast
-      const cap = 1600, k = Math.min(1, cap / Math.max(img.naturalWidth, img.naturalHeight));
-      const cv = document.createElement('canvas');
-      cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
-      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-      URL.revokeObjectURL(url);
-      const t0 = performance.now();
-      const det = await detect(cv, cv.width, cv.height);
-      if (!det) { say('No face found in that photo. A clear, front-facing portrait works best.'); return; }
-      let r = await landmarks(cv, det);
-      r = await landmarks(cv, roiFromMesh(r.pts)); // second pass on a tighter crop
-      Object.assign(state, { mode: 'photo', src: cv, sw: cv.width, sh: cv.height, mirror: false, pts: r.pts, conf: det.score * r.flag, ms: performance.now() - t0 });
-      $('reset').hidden = false;
-      say('');
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); say('That image could not be opened. Try a JPG or PNG.'); };
-    img.src = url;
-  }
-  $('file').addEventListener('change', e => { usePhoto(e.target.files[0]); e.target.value = ''; });
-
-  // drag and drop
-  let dragDepth = 0;
-  window.addEventListener('dragenter', e => { if ([...e.dataTransfer.types].includes('Files')) { dragDepth++; $('drop').hidden = false; e.preventDefault(); } });
-  window.addEventListener('dragover', e => e.preventDefault());
-  window.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('drop').hidden = true; });
-  window.addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; $('drop').hidden = true; usePhoto(e.dataTransfer.files[0]); });
-
-  const video = document.createElement('video');
-  video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
-
-  function stopCamera() {
+  function enterRoom() { $('invite').classList.add('gone'); $('close').hidden = false; }
+  function leaveRoom() {
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-    $('cam-label').textContent = 'Use camera';
+    Object.assign(state, { mode: 'ghost', src: null, pts: null, roi: null });
+    $('invite').classList.remove('gone'); $('close').hidden = true; note('');
   }
+  $('close').addEventListener('click', leaveRoom);
+
   $('cam').addEventListener('click', async () => {
-    if (stream) { toGhost(); return; }
-    if (!mesher) { say('The face model is still loading. Try again in a moment.'); return; }
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('unsupported');
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 } }, audio: false });
-      video.srcObject = stream;
-      await video.play();
-      Object.assign(state, { mode: 'camera', src: video, sw: video.videoWidth, sh: video.videoHeight, mirror: true, pts: null, roi: null, conf: null });
-      $('cam-label').textContent = 'Stop camera';
-      $('reset').hidden = true;
-      say('Looking for a face. Face the camera in even light.');
-    } catch (err) {
-      stopCamera();
-      say('This page could not open a camera here. Embedded previews often block it. Upload a photo instead, or open the page from its own address.');
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      video.srcObject = stream; await video.play();
+      Object.assign(state, { mode: 'camera', src: video, sw: video.videoWidth, sh: video.videoHeight, mirror: true, pts: null, roi: null });
+      note(''); enterRoom();
+    } catch (e) {
+      leaveRoom();
+      note('The camera stayed closed. Allow camera access in your browser, or offer a photo instead.');
     }
   });
 
-  async function trackCamera() {
+  async function usePhoto(file) {
+    if (!file || !file.type.startsWith('image/')) { note('That file is not an image.'); return; }
+    if (!mesher) { note('Still waking up. Try again in a moment.'); return; }
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = async () => {
+      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight)), cv = document.createElement('canvas');
+      cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+      const det = await detect(cv, cv.width, cv.height);
+      if (!det) { note('No face answered. Try a clear, front-facing portrait.'); return; }
+      let r = await landmarks(cv, det); r = await landmarks(cv, roiFromMesh(r.pts));
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      Object.assign(state, { mode: 'photo', src: cv, sw: cv.width, sh: cv.height, mirror: false, pts: r.pts });
+      note(''); enterRoom();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); note('That image could not be opened.'); };
+    img.src = url;
+  }
+  $('file').addEventListener('change', e => { usePhoto(e.target.files[0]); e.target.value = ''; });
+  document.querySelector('label.quiet').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+
+  async function track() {
     if (state.mode !== 'camera' || state.busy || video.readyState < 2) return;
     state.busy = true;
     try {
       state.sw = video.videoWidth; state.sh = video.videoHeight;
-      const t0 = performance.now();
-      let roi = state.roi, detScore = state.conf;
-      if (!roi) {
-        const det = await detect(video, state.sw, state.sh);
-        if (!det) { state.pts = null; state.conf = null; return; }
-        roi = det; detScore = det.score;
-      }
+      let roi = state.roi;
+      if (!roi) { const d = await detect(video, state.sw, state.sh); if (!d) { state.pts = null; return; } roi = d; }
       const r = await landmarks(video, roi);
-      if (r.flag < 0.5) { state.roi = null; state.pts = null; state.conf = null; return; }
+      if (r.flag < 0.5) { state.roi = null; state.pts = null; return; }
       state.pts = r.pts; state.roi = roiFromMesh(r.pts);
-      state.conf = r.flag; state.ms = performance.now() - t0;
-      if (!msg.hidden) say('');
     } finally { state.busy = false; }
   }
 
-  /* ======================================================================
-     Screen placement: every face is framed the same way in the field
-     ====================================================================== */
-  let W = 0, H = 0, DPR = 1;
+  /* ======================= placement ======================= */
+  let W = 0, H = 0, DPR = 1, frame = null;
   function anchor() {
-    if (W < 760) { const h = Math.min(H * 0.36, W * 0.72); return { x: W * 0.5, y: Math.max(h * 0.62 + 70, H * 0.27), h }; }
-    return { x: W * 0.5, y: H * 0.47, h: Math.min(H * 0.6, W * 0.42) };
+    if (W < 640) { const h = Math.min(H * 0.46, W * 0.95); return { x: W / 2, y: H * 0.40, h }; }
+    return { x: W / 2, y: H * 0.45, h: Math.min(H * 0.66, W * 0.5) };
   }
-  // similarity transform from source pixels to screen pixels, framing the oval
   function frameFor(pts, mirror) {
-    let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9;
-    for (const i of C.oval) { const x = pts[i*3], y = pts[i*3+1]; if (y < y0) y0 = y; if (y > y1) y1 = y; if (x < x0) x0 = x; if (x > x1) x1 = x; }
-    const a = anchor();
-    const k = a.h / (y1 - y0 || 1);
-    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    return { k, mx: mirror ? -1 : 1, tx: a.x - (mirror ? -1 : 1) * cx * k, ty: a.y - cy * k };
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const i of C.oval) { const x = pts[i*3], y = pts[i*3+1]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const a = anchor(), k = a.h / ((y1 - y0) || 1), mx = mirror ? -1 : 1;
+    return { k, mx, tx: a.x - mx * (x0 + x1) / 2 * k, ty: a.y - (y0 + y1) / 2 * k };
   }
-  let frame = null;
-  function easeFrame(target) {
-    if (!frame || frame.mx !== target.mx) { frame = { ...target }; return; }
-    const e = 0.15;
-    frame.k += (target.k - frame.k) * e; frame.tx += (target.tx - frame.tx) * e; frame.ty += (target.ty - frame.ty) * e;
-  }
-
   function ghostScreen(t) {
-    const a = anchor();
-    const yaw = Math.sin(t * 0.23) * 0.42, pitch = Math.sin(t * 0.17 + 1) * 0.12, tilt = Math.sin(t * 0.11) * 0.06;
-    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), ct = Math.cos(tilt), st = Math.sin(tilt);
-    // GHOST is normalised so the oval spans ~1.8 units high
-    const k = a.h / 1.8, out = new Float32Array(468 * 3);
+    const a = anchor(), yaw = Math.sin(t * 0.19) * 0.38, pitch = Math.sin(t * 0.13 + 1) * 0.1;
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), k = a.h / 1.8, out = new Float32Array(1404);
     for (let i = 0; i < 468; i++) {
-      let x = GHOST[i*3], y = GHOST[i*3+1], z = GHOST[i*3+2] * 0.9;
-      let x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
-      let y1 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
-      const x2 = x1 * ct - y1 * st, y2 = x1 * st + y1 * ct;
-      out[i*3] = a.x + x2 * k; out[i*3+1] = a.y + y2 * k; out[i*3+2] = z2 * k;
+      const x = GHOST[i*3], y = GHOST[i*3+1], z = GHOST[i*3+2] * 0.9;
+      const x1 = x * cy + z * sy, z1 = -x * sy + z * cy, y1 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+      out[i*3] = a.x + x1 * k; out[i*3+1] = a.y + y1 * k; out[i*3+2] = z2 * k;
     }
     return out;
   }
 
-  /* ======================================================================
-     Face layers (low-res canvases that become shader textures)
-     ====================================================================== */
+  /* ======================= the scanner =======================
+     A pass is one sweep of light across the face. Passes alternate between
+     a straight band (any angle), a wandering spotlight and a raking side light,
+     with dark gaps between them. A faulty-lamp flicker rides on top.            */
+  const scan = { kind: 0, dir: [0, 1], start: 0, dur: 3, gap: 0.8, n: 0, spot: [0, 0] };
+  function nextPass(t) {
+    scan.n++;
+    const r = Math.random();
+    scan.kind = r < 0.5 ? 0 : r < 0.78 ? 1 : 2;
+    const angles = [Math.PI / 2, -Math.PI / 2, 0, Math.PI, Math.PI / 4, 3 * Math.PI / 4, -Math.PI / 4];
+    const a = scan.kind === 0 ? angles[Math.floor(Math.random() * angles.length)] : Math.random() * Math.PI * 2;
+    scan.dir = [Math.cos(a), Math.sin(a)];
+    scan.dur = scan.kind === 0 ? 2.4 + Math.random() * 1.6 : 3.5 + Math.random() * 2;
+    scan.gap = 0.3 + Math.random() * 1.4;
+    scan.start = t;
+    scan.seed = Math.random() * 10;
+  }
+  const flick = { level: 1, until: 0, dip: 1 };
+  function flicker(t) {
+    if (t > flick.until && Math.random() < 0.025) { flick.until = t + 0.04 + Math.random() * 0.16; flick.dip = Math.random() * 0.35; }
+    const target = t < flick.until ? flick.dip : 0.82 + 0.18 * Math.sin(t * 23.0) * Math.sin(t * 7.3);
+    flick.level += (target - flick.level) * 0.5;
+    return flick.level;
+  }
+
+  /* ======================= layers ======================= */
+  const LAYER = 0.5;
   const lines = document.createElement('canvas'), lctx = lines.getContext('2d');
   const photo = document.createElement('canvas'), pctx = photo.getContext('2d');
-  const LAYER = 0.34; // fraction of screen resolution; the shader softens it further
-
   function pathOf(ctx, pts, idx, closed, s) {
-    ctx.beginPath();
-    idx.forEach((i, n) => { const x = pts[i*3] * s, y = pts[i*3+1] * s; n ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.beginPath(); idx.forEach((i, n) => { const x = pts[i*3] * s, y = pts[i*3+1] * s; n ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
     if (closed) ctx.closePath();
   }
-
-  function drawLayers(screenPts, withPhoto) {
+  function drawLayers(sp, withSrc) {
     const s = LAYER;
-    lctx.globalCompositeOperation = 'source-over';
-    lctx.fillStyle = '#000'; lctx.fillRect(0, 0, lines.width, lines.height);
+    lctx.globalCompositeOperation = 'source-over'; lctx.fillStyle = '#000'; lctx.fillRect(0, 0, lines.width, lines.height);
     lctx.globalCompositeOperation = 'lighter';
-    // blue = soft face mass, green = features
-    pathOf(lctx, screenPts, C.oval, true, s);
-    lctx.fillStyle = 'rgb(0,0,255)'; lctx.fill();
-    lctx.lineJoin = 'round'; lctx.lineCap = 'round';
-    lctx.strokeStyle = 'rgb(0,255,0)';
-    lctx.lineWidth = Math.max(1.2, 2.2 * s * DPR);
-    for (const k of Object.keys(C)) { pathOf(lctx, screenPts, C[k], !!CLOSED[k], s); lctx.stroke(); }
-    lctx.fillStyle = 'rgb(0,70,0)';
-    const r = Math.max(0.8, 1.1 * s * DPR);
-    for (let i = 0; i < 468; i++) { lctx.fillRect(screenPts[i*3] * s - r / 2, screenPts[i*3+1] * s - r / 2, r, r); }
-
+    pathOf(lctx, sp, C.oval, true, s); lctx.fillStyle = 'rgb(0,0,255)'; lctx.fill();
+    lctx.strokeStyle = 'rgb(0,255,0)'; lctx.lineJoin = lctx.lineCap = 'round'; lctx.lineWidth = Math.max(1.2, 2 * s);
+    for (const k of Object.keys(C)) { pathOf(lctx, sp, C[k], !!CLOSED[k], s); lctx.stroke(); }
     pctx.clearRect(0, 0, photo.width, photo.height);
-    if (withPhoto && state.src && frame) {
-      pctx.save();
-      pathOf(pctx, screenPts, C.oval, true, s);
-      pctx.clip();
+    if (withSrc && state.src && frame) {
+      pctx.save(); pathOf(pctx, sp, C.oval, true, s); pctx.clip();
+      // a little beyond the oval: hair line and ears catch the light too
       pctx.setTransform(frame.mx * frame.k * s, 0, 0, frame.k * s, frame.tx * s, frame.ty * s);
-      pctx.drawImage(state.src, 0, 0, state.sw, state.sh);
-      pctx.restore();
+      pctx.drawImage(state.src, 0, 0, state.sw, state.sh); pctx.restore();
     }
   }
 
-  /* ---------------- crisp overlay ---------------- */
-  const overlay = $('overlay'), octx = overlay.getContext('2d');
-  function drawOverlay(screenPts, strength) {
-    octx.setTransform(1, 0, 0, 1, 0, 0);
-    octx.clearRect(0, 0, overlay.width, overlay.height);
-    if (overlayMode === 'off' || strength <= 0.01) return;
-    octx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    if (overlayMode === 'points') {
-      octx.fillStyle = 'rgba(255,180,143,' + (0.75 * strength).toFixed(3) + ')';
-      for (let i = 0; i < 468; i++) {
-        const z = screenPts[i*3+2];
-        const r = Math.max(0.7, 1.35 - z * 0.004);
-        octx.beginPath(); octx.arc(screenPts[i*3], screenPts[i*3+1], r, 0, 6.283); octx.fill();
-      }
-    } else {
-      octx.strokeStyle = 'rgba(255,180,143,' + (0.85 * strength).toFixed(3) + ')';
-      octx.lineWidth = 1.2; octx.lineJoin = 'round';
-      for (const k of Object.keys(C)) { pathOf(octx, screenPts, C[k], !!CLOSED[k], 1); octx.stroke(); }
-    }
-  }
-
-  /* ======================================================================
-     Fluid shader
-     ====================================================================== */
-  const canvas = $('flow');
-  const gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false });
-
-  const VERT = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';
+  /* ======================= shader ======================= */
+  const canvas = $('flow'), gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false });
   const FRAG = `
     precision highp float;
-    uniform vec2 uRes; uniform float uTime; uniform float uReveal; uniform float uLive;
-    uniform sampler2D uLines; uniform sampler2D uPhoto;
-    uniform vec2 uTexel;
+    uniform vec2 uRes; uniform float uTime; uniform float uLive; uniform float uFlick;
+    uniform sampler2D uLines; uniform sampler2D uPhoto; uniform vec2 uTexel;
+    uniform vec4 uBox;      // face centre (uv) and half-size (uv)
+    uniform float uKind;    // 0 band, 1 spotlight, 2 raking light
+    uniform vec2 uDir; uniform float uPhase; uniform vec2 uSpot; uniform float uOn;
 
     vec3 permute(vec3 x){ return mod(((x*34.0)+1.0)*x, 289.0); }
     float snoise(vec2 v){
@@ -693,181 +370,211 @@ footer {
     float fbm(vec2 p){ float v = 0.0, a = 0.5; mat2 r = mat2(0.8,-0.6,0.6,0.8);
       for (int i = 0; i < 5; i++){ v += a * snoise(p); p = r * p * 2.02 + 3.7; a *= 0.5; } return v; }
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-
-    vec3 soft(sampler2D s, vec2 uv, float r){
-      vec3 acc = texture2D(s, uv).rgb * 0.2;
-      acc += texture2D(s, uv + uTexel * vec2( r, 0.0)).rgb * 0.1;
-      acc += texture2D(s, uv + uTexel * vec2(-r, 0.0)).rgb * 0.1;
-      acc += texture2D(s, uv + uTexel * vec2(0.0,  r)).rgb * 0.1;
-      acc += texture2D(s, uv + uTexel * vec2(0.0, -r)).rgb * 0.1;
-      acc += texture2D(s, uv + uTexel * vec2( r,  r) * 0.7).rgb * 0.1;
-      acc += texture2D(s, uv + uTexel * vec2(-r,  r) * 0.7).rgb * 0.1;
-      acc += texture2D(s, uv + uTexel * vec2( r, -r) * 0.7).rgb * 0.1;
-      acc += texture2D(s, uv + uTexel * vec2(-r, -r) * 0.7).rgb * 0.1;
-      return acc;
+    float lumAt(vec2 uv){ return dot(texture2D(uPhoto, uv).rgb, vec3(0.299, 0.587, 0.114)); }
+    float blurB(vec2 uv, float r){
+      float a = texture2D(uLines, uv).b * 0.2;
+      a += texture2D(uLines, uv + uTexel * vec2(r, 0.0)).b * 0.2; a += texture2D(uLines, uv - uTexel * vec2(r, 0.0)).b * 0.2;
+      a += texture2D(uLines, uv + uTexel * vec2(0.0, r)).b * 0.2; a += texture2D(uLines, uv - uTexel * vec2(0.0, r)).b * 0.2;
+      return a;
     }
 
     void main(){
       vec2 uv = gl_FragCoord.xy / uRes;
-      vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y) * 1.2;
-      float t = uTime * 0.04;
+      float aspect = uRes.x / uRes.y;
+      vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y) * 1.3;
+      float t = uTime * 0.03;
 
-      // the face mass slows and compresses the current around it
-      float massPre = texture2D(uLines, uv).b;
-      p *= 1.0 + massPre * 0.18;
-
+      // the dark room: slow, low-contrast smoke
       vec2 q = vec2(fbm(p + vec2(0.0, t)), fbm(p + vec2(5.2, 1.3) - t * 0.7));
-      vec2 r = vec2(fbm(p + 1.8 * q + vec2(1.7, 9.2) + t * 0.9), fbm(p + 1.8 * q + vec2(8.3, 2.8) - t * 0.6));
-      float f = fbm(p + 2.2 * r);
+      vec2 r = vec2(fbm(p + 1.7 * q + vec2(1.7, 9.2) + t), fbm(p + 1.7 * q + vec2(8.3, 2.8) - t * 0.6));
+      float f = fbm(p + 2.0 * r);
+      vec3 col = mix(vec3(0.010, 0.013, 0.015), vec3(0.035, 0.050, 0.055), smoothstep(-0.2, 0.9, f));
 
-      vec3 inkC  = vec3(0.027, 0.035, 0.043);
-      vec3 slate = vec3(0.07, 0.12, 0.14);
-      vec3 smoke = vec3(0.24, 0.33, 0.35);
-      vec3 bone  = vec3(0.93, 0.91, 0.87);
-      vec3 peach = vec3(1.00, 0.71, 0.56);
+      // ---- where is the light?  coordinates relative to the face box
+      vec2 d = (uv - uBox.xy) / uBox.zw;           // ~[-1,1] across the face
+      d.x *= (uBox.z * aspect) / uBox.w;           // keep it round, not stretched
+      float beam = 0.0, line = 0.0, trail = 0.0;
+      vec3 Ldir = vec3(0.0, 0.0, 1.0);
+      if (uKind < 0.5) {
+        float s = dot(d, uDir);
+        float c = mix(-1.5, 1.5, uPhase);
+        float wob = fbm(d * 2.0 + uTime * 0.3) * 0.12;      // the band edge breathes
+        beam  = exp(-pow((s - c + wob) / 0.16, 2.0));
+        line  = exp(-pow((s - c + wob) / 0.012, 2.0));
+        trail = s < c ? exp(-(c - s) * 2.6) * 0.55 : 0.0;
+        Ldir = normalize(vec3(-uDir, 0.7));
+      } else if (uKind < 1.5) {
+        vec2 sp = uSpot;
+        float dd = length(d - sp);
+        beam = exp(-pow(dd / 0.42, 2.0));
+        line = exp(-pow((dd - 0.42) / 0.02, 2.0)) * 0.35;  // ring at the spot's rim
+        Ldir = normalize(vec3(sp, 0.8));
+      } else {
+        // raking light: no band, the whole face lit from a low, slowly orbiting source
+        beam = 0.55 + 0.45 * smoothstep(-0.4, 0.8, dot(d, uDir));
+        Ldir = normalize(vec3(uDir, 0.28));
+      }
+      // partial reveal: only some patches answer the light
+      float patch = smoothstep(0.05, 0.55, fbm(d * 1.6 + vec2(uTime * 0.11, -uTime * 0.07)) + 0.25);
+      float light = (beam * (0.35 + 0.65 * patch) + trail * patch) * uOn * uFlick;
 
-      float n = clamp(0.5 + 0.5 * f, 0.0, 1.0);
-      vec3 col = mix(inkC, slate, smoothstep(0.15, 0.62, n));
-      col = mix(col, smoke, smoothstep(0.5, 1.0, length(q) * 0.9 + 0.25 * r.x));
-      float ribbon = smoothstep(0.6, 1.0, abs(r.y) * 1.25) * smoothstep(0.35, 0.9, n);
-      col = mix(col, bone, ribbon * 0.35);
+      // ---- the face: luminance of the source, lit as a relief by the moving light
+      vec2 wv = uv + (r) * 0.004;                   // a breath of the smoke in the image
+      float m = smoothstep(0.15, 0.85, blurB(wv, 6.0));
+      float L = lumAt(wv);
+      float gx = lumAt(wv + vec2(uTexel.x * 1.5, 0.0)) - lumAt(wv - vec2(uTexel.x * 1.5, 0.0));
+      float gy = lumAt(wv + vec2(0.0, uTexel.y * 1.5)) - lumAt(wv - vec2(0.0, uTexel.y * 1.5));
+      vec3 n = normalize(vec3(-gx * 6.0, -gy * 6.0, 1.0));
+      float relief = clamp(dot(n, Ldir), 0.0, 1.0);
+      float photoFace = (pow(L, 1.15) * 0.75 + relief * 0.55 - 0.18) * m * uLive;
 
-      // sample the face through the current so it shimmers instead of sitting on top
-      vec2 wob = (r - 0.0) * 0.012 + (q - 0.0) * 0.006;
-      vec2 fuv = uv + wob;
-      vec3 L = soft(uLines, fuv, 2.5);
-      vec3 Lwide = soft(uLines, fuv, 9.0);
-      float mass = Lwide.b;
-      float feat = L.g;
-      vec4 ph = texture2D(uPhoto, fuv);
-      float lum = dot(ph.rgb, vec3(0.299, 0.587, 0.114));
-      // local contrast of the photo, so features read even in flat light
-      vec4 phB = texture2D(uPhoto, fuv + uTexel * 6.0);
-      float lumB = dot(phB.rgb, vec3(0.299, 0.587, 0.114));
-      float detail = clamp(0.5 + (lum - lumB) * 2.2, 0.0, 1.0);
+      // without a source, the mesh lines are what the light finds
+      float feat = 0.0;
+      feat += texture2D(uLines, wv).g * 0.5;
+      feat += texture2D(uLines, wv + uTexel * vec2(1.5, 0.0)).g * 0.25;
+      feat += texture2D(uLines, wv - uTexel * vec2(1.5, 0.0)).g * 0.25;
+      float ghostFace = (feat * 0.75 + m * 0.07) * (1.0 - uLive);
 
-      float swirl = 0.55 + 0.45 * smoothstep(0.2, 0.9, n);   // the current breaks the face up
-      float faceLight = (mass * 0.16 + feat * 0.55) * (1.0 - uLive * 0.45)
-                      + ph.a * (lum * 0.62 + (detail - 0.5) * 0.35) * uLive;
-      faceLight *= swirl * uReveal * 1.25;
+      float face = max(photoFace + ghostFace, 0.0);
+      vec3 beamC = vec3(0.79, 0.95, 0.91);
+      vec3 warm  = vec3(1.0, 0.82, 0.68);
+      vec3 lit = mix(beamC, warm, trail * 0.6) * face * light * 1.25;
+      // scan line edge glows on the face and faintly in the smoke
+      lit += beamC * line * (0.35 * m + 0.05) * uOn * uFlick;
+      col += beamC * beam * 0.025 * uOn * uFlick * (0.5 + f);
+      col += lit;
 
-      col = mix(col, mix(bone, peach, 0.18 + 0.25 * r.x), clamp(faceLight, 0.0, 0.9));
-      col += peach * feat * 0.05 * uReveal;
-
-      float vig = smoothstep(1.25, 0.2, length((uv - 0.5) * vec2(1.1, 1.0)));
-      col *= mix(0.5, 1.0, vig);
-      col += (hash(gl_FragCoord.xy + fract(uTime) * 91.0) - 0.5) * 0.035;
+      // fine scanlines only inside the light
+      col *= 1.0 - 0.18 * light * step(0.5, fract(gl_FragCoord.y * 0.5));
+      // vignette + grain
+      col *= smoothstep(1.35, 0.2, length((uv - 0.5) * vec2(1.15, 1.0)));
+      col += (hash(gl_FragCoord.xy + fract(uTime) * 91.0) - 0.5) * 0.03;
       gl_FragColor = vec4(col, 1.0);
     }`;
-
-  let prog = null, U = {}, texLines = null, texPhoto = null;
-  function compile(type, src) {
-    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; }
-    return s;
-  }
-  function makeTex() {
-    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return t;
-  }
+  let prog = null, U = {}, tL = null, tP = null;
+  function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; } return s; }
+  function tex() { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]].forEach(([k, v]) => gl.texParameteri(gl.TEXTURE_2D, k, v));
+    return t; }
   if (gl) {
-    const vs = compile(gl.VERTEX_SHADER, VERT), fs = compile(gl.FRAGMENT_SHADER, FRAG);
-    if (vs && fs) {
-      prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
-      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); prog = null; }
-    }
+    const vs = sh(gl.VERTEX_SHADER, 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }'), fs = sh(gl.FRAGMENT_SHADER, FRAG);
+    if (vs && fs) { prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); prog = null; } }
     if (prog) {
       gl.useProgram(prog);
-      const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-      ['uRes', 'uTime', 'uReveal', 'uLive', 'uLines', 'uPhoto', 'uTexel'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
-      texLines = makeTex(); texPhoto = makeTex();
-      gl.uniform1i(U.uLines, 0); gl.uniform1i(U.uPhoto, 1);
+      ['uRes','uTime','uLive','uFlick','uLines','uPhoto','uTexel','uBox','uKind','uDir','uPhase','uSpot','uOn'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+      tL = tex(); tP = tex(); gl.uniform1i(U.uLines, 0); gl.uniform1i(U.uPhoto, 1);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     }
   }
 
-  const SHADER_SCALE = 0.6;
+  const glints = $('glints'), gctx = glints.getContext('2d');
   function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth; H = window.innerHeight;
-    const fw = Math.max(1, Math.floor(W * DPR * SHADER_SCALE)), fh = Math.max(1, Math.floor(H * DPR * SHADER_SCALE));
+    DPR = Math.min(window.devicePixelRatio || 1, 2); W = window.innerWidth; H = window.innerHeight;
+    const fw = Math.max(1, Math.floor(W * DPR * 0.75)), fh = Math.max(1, Math.floor(H * DPR * 0.75));
     if (canvas.width !== fw || canvas.height !== fh) { canvas.width = fw; canvas.height = fh; if (gl) gl.viewport(0, 0, fw, fh); }
-    const ow = Math.floor(W * DPR), oh = Math.floor(H * DPR);
-    if (overlay.width !== ow || overlay.height !== oh) { overlay.width = ow; overlay.height = oh; }
+    if (glints.width !== Math.floor(W * DPR) || glints.height !== Math.floor(H * DPR)) { glints.width = Math.floor(W * DPR); glints.height = Math.floor(H * DPR); }
     const lw = Math.max(2, Math.floor(W * LAYER)), lh = Math.max(2, Math.floor(H * LAYER));
     if (lines.width !== lw || lines.height !== lh) { lines.width = photo.width = lw; lines.height = photo.height = lh; }
   }
-  window.addEventListener('resize', resize);
-  resize();
+  window.addEventListener('resize', resize); resize();
 
-  /* ======================================================================
-     Main loop
-     ====================================================================== */
+  /* ======================= loop ======================= */
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let visible = !document.hidden;
+  let visible = !document.hidden, lastHud = 0;
   document.addEventListener('visibilitychange', () => { visible = !document.hidden; if (visible) requestAnimationFrame(loop); });
-  const t0 = performance.now(), seed = Math.random() * 50;
-  let live = 0;
+  const T0 = performance.now(), seed = Math.random() * 40;
+  nextPass(0);
 
   function loop(now) {
     if (!visible) return;
     resize();
-    const t = (now - t0) / 1000;
-    if (state.mode === 'camera') trackCamera();
+    const t = (now - T0) / 1000;
+    if (state.mode === 'camera') track();
 
-    // pick what to draw
-    let screenPts, srcLabel, hasReal = false;
-    const ghost = ghostScreen(reduce.matches ? 0 : t);
+    const ghost = ghostScreen(t);
+    let real = null;
     if (state.pts && state.mode !== 'ghost') {
-      hasReal = true;
-      easeFrame(frameFor(state.pts, state.mirror));
-      const real = new Float32Array(468 * 3);
-      for (let i = 0; i < 468; i++) {
-        real[i*3] = frame.tx + frame.mx * frame.k * state.pts[i*3];
-        real[i*3+1] = frame.ty + frame.k * state.pts[i*3+1];
-        real[i*3+2] = frame.k * state.pts[i*3+2];
-      }
-      // light temporal smoothing for the camera
-      if (state.shown && state.mode === 'camera') for (let i = 0; i < real.length; i++) real[i] = state.shown[i] + (real[i] - state.shown[i]) * 0.55;
+      const target = frameFor(state.pts, state.mirror);
+      if (!frame || frame.mx !== target.mx) frame = { ...target };
+      else { frame.k += (target.k - frame.k) * 0.12; frame.tx += (target.tx - frame.tx) * 0.12; frame.ty += (target.ty - frame.ty) * 0.12; }
+      real = new Float32Array(1404);
+      for (let i = 0; i < 468; i++) { real[i*3] = frame.tx + frame.mx * frame.k * state.pts[i*3]; real[i*3+1] = frame.ty + frame.k * state.pts[i*3+1]; real[i*3+2] = frame.k * state.pts[i*3+2]; }
+      if (state.shown && state.mode === 'camera') for (let i = 0; i < 1404; i++) real[i] = state.shown[i] + (real[i] - state.shown[i]) * 0.55;
       state.shown = real;
     }
-    const targetBlend = hasReal ? 1 : 0;
-    state.blend += (targetBlend - state.blend) * 0.06;
-    live = state.blend;
+    state.blend += ((real ? 1 : 0) - state.blend) * 0.05;
+    let sp = ghost;
+    if (state.shown && state.blend > 0.002) { sp = new Float32Array(1404); for (let i = 0; i < 1404; i++) sp[i] = ghost[i] + (state.shown[i] - ghost[i]) * state.blend; }
 
-    if (state.blend > 0.001 && state.shown) {
-      screenPts = new Float32Array(468 * 3);
-      const b = state.blend;
-      for (let i = 0; i < screenPts.length; i++) screenPts[i] = ghost[i] + (state.shown[i] - ghost[i]) * b;
-    } else {
-      screenPts = ghost;
-      if (!hasReal) frame = null;
+    drawLayers(sp, !!real);
+
+    // face box (screen px) from the oval
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const i of C.oval) { x0 = Math.min(x0, sp[i*3]); x1 = Math.max(x1, sp[i*3]); y0 = Math.min(y0, sp[i*3+1]); y1 = Math.max(y1, sp[i*3+1]); }
+    const bc = [(x0 + x1) / 2, (y0 + y1) / 2], bh = [(x1 - x0) / 2 * 1.15, (y1 - y0) / 2 * 1.1];
+
+    // scanner timing
+    let el = t - scan.start;
+    if (el > scan.dur + scan.gap) { nextPass(t); el = 0; }
+    const on = el < scan.dur ? Math.min(1, el / 0.25, (scan.dur - el) / 0.35) : 0;
+    const phase = reduce.matches ? 0.5 : Math.min(1, el / scan.dur);
+    const ease = phase < 0.5 ? 2 * phase * phase : 1 - Math.pow(-2 * phase + 2, 2) / 2;
+    const spot = [Math.sin(el * 0.9 + scan.seed) * 0.55, Math.cos(el * 0.7 + scan.seed * 1.7) * 0.6];
+    const rakeA = scan.seed + el * 0.6;
+    const dir = scan.kind === 2 ? [Math.cos(rakeA), Math.sin(rakeA)] : scan.dir;
+    const fl = reduce.matches ? 0.9 : flicker(t);
+    // the passive room is dimmer than a room with someone in it
+    const presence = 0.55 + 0.45 * state.blend;
+
+    // glints: landmark points catch the band as it crosses them
+    gctx.setTransform(1, 0, 0, 1, 0, 0); gctx.clearRect(0, 0, glints.width, glints.height);
+    if (on > 0.01) {
+      gctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      const c = -1.5 + 3 * ease;
+      for (let i = 0; i < 468; i++) {
+        let dx = (sp[i*3] - bc[0]) / bh[0], dy = -(sp[i*3+1] - bc[1]) / bh[1];
+        dx *= bh[0] / bh[1];
+        let g;
+        if (scan.kind === 0) { const s = dx * dir[0] + dy * dir[1]; g = Math.exp(-Math.pow((s - c) / 0.05, 2)); }
+        else if (scan.kind === 1) { const dd = Math.hypot(dx - spot[0], dy - spot[1]); g = Math.exp(-Math.pow((dd - 0.42) / 0.05, 2)) * 0.6; }
+        else { g = 0; }
+        if (g < 0.04) continue;
+        gctx.fillStyle = 'rgba(214,248,238,' + (g * on * fl * presence * 0.9).toFixed(3) + ')';
+        gctx.fillRect(sp[i*3] - 0.8, sp[i*3+1] - 0.8, 1.6, 1.6);
+      }
     }
-    srcLabel = state.mode === 'ghost' ? 'Reference face' : state.mode === 'photo' ? 'Photo' : (hasReal ? 'Camera' : 'Camera · searching');
-
-    drawLayers(screenPts, hasReal);
-    drawOverlay(screenPts, hasReal ? 1 : 0.4);
-
-    const mPts = hasReal ? state.pts : ghost;
-    renderReadout(measure(mPts), hasReal ? state.conf : null, hasReal ? state.ms : null, srcLabel, now);
 
     if (prog) {
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texLines);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, lines);
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texPhoto);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, photo);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tL); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, lines);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tP); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, photo);
       gl.uniform2f(U.uRes, canvas.width, canvas.height);
       gl.uniform2f(U.uTexel, 1 / lines.width, 1 / lines.height);
-      gl.uniform1f(U.uTime, seed + t * (reduce.matches ? 0.1 : 1));
-      gl.uniform1f(U.uReveal, reveal);
-      gl.uniform1f(U.uLive, live);
+      gl.uniform1f(U.uTime, seed + t * (reduce.matches ? 0.15 : 1));
+      gl.uniform1f(U.uLive, state.blend);
+      gl.uniform1f(U.uFlick, fl * presence);
+      gl.uniform4f(U.uBox, bc[0] / W, 1 - bc[1] / H, bh[0] / W, bh[1] / H);
+      gl.uniform1f(U.uKind, scan.kind);
+      gl.uniform2f(U.uDir, dir[0], dir[1]);
+      gl.uniform1f(U.uPhase, ease);
+      gl.uniform2f(U.uSpot, spot[0], spot[1]);
+      gl.uniform1f(U.uOn, on);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    if (now - lastHud > 200) {
+      lastHud = now;
+      const kinds = ['Band', 'Lamp', 'Raking'];
+      const found = state.mode !== 'ghost' && !!state.pts;
+      $('hud-state').innerHTML = state.mode === 'ghost' ? 'Dark room' : found ? '<span class="live">Subject present</span>' : 'Searching';
+      $('hud-pass').textContent = 'Pass ' + String(scan.n).padStart(2, '0') + ' · ' + (on > 0 ? kinds[scan.kind] : 'Dark');
+      $('hud-pts').textContent = (found ? '468' : '—') + ' / 468';
+      const ps = pose(found ? state.pts : sp);
+      const sg = v => (v >= 0 ? '+' : '') + v + '°';
+      $('hud-pose').innerHTML = 'Yaw ' + sg(ps.yaw) + '<br>Pitch ' + sg(ps.pitch);
     }
 
     if (reduce.matches && state.mode !== 'camera') setTimeout(() => requestAnimationFrame(loop), 120);
@@ -875,17 +582,8 @@ footer {
   }
   requestAnimationFrame(loop);
 
-  /* ---------------- boot ---------------- */
-  $('cam').disabled = true;
-  loadModels().then(() => {
-    setStatus('ready', 'Model ready');
-    pillText.innerHTML = 'Model ready <span class="long">· running on this device</span>';
-    $('cam').disabled = false;
-  }).catch(err => {
-    console.error(err);
-    setStatus('error', 'Model failed to load');
-    say('The face model could not load, so detection is off. The reference face still plays. Reload the page to try again.');
-  });
+  loadModels().then(() => { $('cam').disabled = false; })
+    .catch(e => { console.error(e); note('The watcher could not wake: the face model failed to load. Reload to try again.'); });
 })();
 </script>
 
