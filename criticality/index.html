@@ -108,7 +108,7 @@ main { position: relative; z-index: 3; }
 .hero .pin { align-items: flex-end; }
 .hero .copy { width: min(100%, 1200px); }
 .title {
-  margin: 0; font: 800 clamp(64px, 13.2vw, 220px)/.82 var(--display); letter-spacing: -.01em;
+  margin: 0; font: 800 clamp(56px, 11vw, 200px)/.82 var(--display); letter-spacing: -.01em;
   color: var(--ink);
 }
 .title span { color: var(--yellow); }
@@ -130,7 +130,11 @@ footer {
 @media (max-width: 820px) {
   .scrim { background: linear-gradient(0deg, rgba(2,5,7,.95) 0%, rgba(2,5,7,.82) 36%, rgba(2,5,7,0) 52%); }
   .copy { width: 100%; gap: 12px; }
-  .big { font-size: clamp(48px, 15vw, 80px); }
+  .big { font-size: clamp(44px, 13vw, 76px); }
+  .title { font-size: 12.5vw; }
+  .note { display: none; }
+  .top { font-size: 10px; }
+  .top #clock { display: none; }
   .lede { font-size: 15.5px; }
   .cn { font-size: 13.5px; }
   .note { font-size: 13px; }
@@ -138,7 +142,7 @@ footer {
   .pin { padding-block: 0 calc(5vh + env(safe-area-inset-bottom, 0px)); }
   .data { font-size: 11px; }
 }
-@media (max-width: 820px) and (max-height: 760px) { .note { display: none; } }
+@media (max-width: 820px) and (max-height: 760px) { .cn { display: none; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 </style>
 </head>
@@ -276,7 +280,7 @@ footer {
   }
   // where scenes draw: right of the copy on wide screens, the upper part on phones
   function stage() {
-    if (W < 820) return { x: 16, y: 54, w: W - 32, h: H * 0.5 };
+    if (W < 820) return { x: 16, y: 64, w: W - 32, h: H * 0.4 };
     const left = Math.min(W * 0.4, 600);
     return { x: left, y: 64, w: W - left - 150, h: H - 128 };
   }
@@ -382,7 +386,7 @@ footer {
         label('R', 10, -R + 4, C.greenHi); label('1.5R', 10, -1.5 * R + 4, C.greenHi); label('5R', 10, -5 * R + 4, C.greenHi);
         g.beginPath(); g.arc(0, 0, 5.55 * R, -Math.PI / 3, 0); g.stroke();
         label('60°', Math.cos(-Math.PI / 6) * 5.9 * R, Math.sin(-Math.PI / 6) * 5.9 * R, C.greenHi);
-        label('ISO 361 · ionizing radiation', 0, 6.4 * R, rgba(C.ink, .45), 10.5, 'center');
+        if (wide) label('ISO 361 · ionizing radiation', -5.2 * R, -5.2 * R, rgba(C.ink, .45), 10.5, 'right');
       }
       g.restore();
     }
@@ -391,7 +395,7 @@ footer {
   /* ================= scene 1 · chain reaction ================= */
   const chain = {
     tint: 'blue', glow: 0.6, tree: null, age: 0, reg: -1,
-    regimes: [{ k: 0.90, name: 'SUBCRITICAL' }, { k: 1.00, name: 'CRITICAL' }, { k: 1.10, name: 'SUPERCRITICAL' }],
+    regimes: [{ k: 0.85, name: 'SUBCRITICAL' }, { k: 1.00, name: 'CRITICAL' }, { k: 1.25, name: 'SUPERCRITICAL' }],
     build(k) {
       const G = 12, CAP = 520, N0 = 10, gens = [], pops = [N0];
       let cur = []; for (let i = 0; i < N0; i++) cur.push({ a: i / N0 * Math.PI * 2 + Math.random() * .3, par: -1, fiss: false });
@@ -443,10 +447,13 @@ footer {
       label(rg.name, S.x, S.y + 36, col, 11, 'left', 500);
       label('GENERATION ' + String(gen).padStart(2, '0'), S.x + S.w, S.y + 14, rgba(C.ink, .7), 11, 'right');
       label('N ≈ ' + sci(tr.pops[gen] || 0) + ' neutrons', S.x + S.w, S.y + 32, rgba(C.ink, .7), 11, 'right');
-      label('● fission   ● neutron in flight   ● absorbed or escaped', S.x, S.y + S.h - 4, rgba(C.ink, .45), 10.5);
-      g.fillStyle = C.yellow; g.fillRect(S.x, S.y + S.h - 12, 6, 6);
-      g.fillStyle = C.blueHot; g.fillRect(S.x + 84, S.y + S.h - 12, 6, 6);
-      g.fillStyle = rgba(C.greenHi, .5); g.fillRect(S.x + 260, S.y + S.h - 12, 6, 6);
+      if (S.w > 480) {
+        label('   fission     neutron in flight     absorbed or escaped', S.x, S.y + S.h - 4, rgba(C.ink, .45), 10.5);
+        g.font = `400 10.5px ${MONO}`; const w1 = g.measureText('   fission  ').width, w2 = g.measureText('   fission     neutron in flight  ').width;
+        g.fillStyle = C.yellow; g.fillRect(S.x, S.y + S.h - 12, 6, 6);
+        g.fillStyle = C.blueHot; g.fillRect(S.x + w1 + 4, S.y + S.h - 12, 6, 6);
+        g.fillStyle = rgba(C.greenHi, .5); g.fillRect(S.x + w2 + 4, S.y + S.h - 12, 6, 6);
+      }
     }
   };
 
@@ -490,11 +497,12 @@ footer {
       this.ps = this.ps.filter(q => q.T > 0.03 && q.x < S.x + S.w + 40 && q.y > S.y - 40 && q.y < S.y + S.h + 40);
       // readout
       label('WATER · n = 1.33', S.x, S.y + 14, C.blueHot, 11, 'left', 500);
-      label('threshold β = 1/n = 0.752 · T = 0.264 MeV · θmax = 41.2°', S.x, S.y + 32, rgba(C.ink, .55), 10.5);
+      const narrow = S.w < 560;
+      label(narrow ? 'threshold β 0.752 · 0.264 MeV' : 'threshold β = 1/n = 0.752 · T = 0.264 MeV · θmax = 41.2°', S.x, S.y + 32, rgba(C.ink, .55), 10.5);
       if (feat) {
         const th = Math.acos(1 / (n * feat.beta)) * 180 / Math.PI;
         label('β ' + feat.beta.toFixed(3), S.x + S.w, S.y + 14, C.yellow, 13, 'right', 500);
-        label('θ ' + th.toFixed(1) + '°   T ' + feat.T.toFixed(2) + ' MeV', S.x + S.w, S.y + 32, rgba(C.ink, .7), 11, 'right');
+        label('θ ' + th.toFixed(1) + '°   T ' + feat.T.toFixed(2) + ' MeV', S.x + S.w, S.y + (narrow ? 50 : 32), rgba(C.ink, .7), 11, 'right');
       }
       // scale bar and time dilation of the display
       const bx = S.x, by = S.y + S.h - 8;
@@ -515,7 +523,8 @@ footer {
       else if (r < .82) { for (;;) { const c = 2 * Math.random() - 1, q = 1 / (1 + k * (1 - c)), f = q * q * (q + 1 / q - (1 - c * c));
           if (Math.random() * 2 < f) { E = E0 - E0 * q; break; } } }                   // Klein–Nishina
       else if (r < .90) { const c = -1 + .4 * Math.random(); E = E0 / (1 + k * (1 - c)); } // scattered in the shield, then absorbed
-      else if (r < .96) E = 32;
+      else if (r < .955) E = 32;
+      else if (r < .985) E = 477 + Math.random() * 185;                                 // multiple Compton scatters fill the valley
       else E = -Math.log(Math.random()) * 40;
       if (E > 0) E += gauss() * 0.075 * Math.sqrt(662 * E) / 2.355;                     // NaI: 7.5% FWHM at 662 keV
       const b = Math.floor(E / this.maxE * this.NB);
@@ -525,7 +534,7 @@ footer {
     draw(S, p, t, dt) {
       const m = Math.min(4000, (reduce ? 3000 : 900 + 5200 * p) * dt);
       for (let i = 0; i < m; i++) this.sample();
-      const L = 54, B = 34, x0 = S.x + L, y0 = S.y + S.h - B, w = S.w - L - 10, h = S.h - B - 50;
+      const narrow = S.w < 560, L = narrow ? 34 : 54, B = 34, x0 = S.x + L, y0 = S.y + S.h - B, w = S.w - L - 10, h = S.h - B - (narrow ? 96 : 100);
       let mx = 1; for (const c of this.bins) mx = Math.max(mx, c);
       const top = Math.max(2, Math.ceil(Math.log10(mx * 1.3)));
       const X = E => x0 + E / this.maxE * w, Y = c => y0 - (c > 0 ? Math.log10(c) / top * h : 0);
@@ -537,7 +546,7 @@ footer {
       for (let d = 0; d <= top; d++) label('10' + String(d).split('').map(c => SUP[c]).join(''), x0 - 10, y0 - d / top * h + 4, rgba(C.ink, .5), 10.5, 'right');
       for (let e = 0; e <= 700; e += 100) label(String(e), X(e), y0 + 16, rgba(C.ink, .5), 10.5, 'center');
       label('keV', x0 + w, y0 + 30, rgba(C.ink, .5), 10.5, 'right');
-      label('counts (log)', x0 - 10, y0 - h - 12, rgba(C.ink, .5), 10.5, 'left');
+      label('counts (log)', x0 - 10, y0 + 30, rgba(C.ink, .5), 10.5, 'left');
       // histogram
       const bw = w / this.NB;
       g.beginPath(); g.moveTo(x0, y0);
@@ -549,14 +558,14 @@ footer {
       for (let i = 0; i < this.NB; i++) { const y = Y(this.bins[i]); i ? g.lineTo(x0 + i * bw, y) : g.moveTo(x0, y); g.lineTo(x0 + (i + 1) * bw, y); }
       g.stroke();
       // markers
-      const marks = [[661.7, 'PHOTOPEAK 661.7'], [477.3, 'COMPTON EDGE 477'], [184.3, 'BACKSCATTER 184'], [32, 'Ba K 32']];
+      const marks = narrow ? [[661.7, '661.7'], [477.3, '477'], [184.3, '184'], [32, '32']] : [[661.7, 'PHOTOPEAK 661.7'], [477.3, 'COMPTON EDGE 477'], [184.3, 'BACKSCATTER 184'], [32, 'Ba K 32']];
       g.setLineDash([2, 4]); g.strokeStyle = rgba(C.blueHot, .7); g.beginPath();
       for (const [e] of marks) { g.moveTo(X(e), y0); g.lineTo(X(e), y0 - h - 4); } g.stroke(); g.setLineDash([]);
       marks.forEach(([e, s], i) => label(s, X(e) + (i === 3 ? 4 : -4), y0 - h - 10 - (i % 2) * 14, C.blueHot, 10.5, i === 3 ? 'left' : 'right'));
       let pk = 0; for (let i = Math.floor(630 / this.maxE * this.NB); i <= Math.floor(695 / this.maxE * this.NB); i++) pk += this.bins[i];
       label('N = ' + this.N.toLocaleString('en-US') + ' photons', S.x, S.y + 14, C.yellow, 13, 'left', 500);
-      label('photopeak uncertainty 1/√N = ' + (pk ? (100 / Math.sqrt(pk)).toFixed(2) : '—') + '%', S.x, S.y + 32, rgba(C.ink, .65), 11);
-      label('¹³⁷Cs · NaI(Tl) 7.5% FWHM', S.x + S.w, S.y + 14, rgba(C.ink, .55), 10.5, 'right');
+      label((narrow ? 'peak ±' : 'photopeak uncertainty 1/√N = ') + (pk ? (100 / Math.sqrt(pk)).toFixed(2) : '—') + '%', S.x, S.y + 32, rgba(C.ink, .65), 11);
+      if (!narrow) label('¹³⁷Cs · NaI(Tl) 7.5% FWHM', S.x + S.w, S.y + 14, rgba(C.ink, .55), 10.5, 'right');
     }
   };
 
@@ -571,7 +580,7 @@ footer {
       label('26·04·1986  01:23:' + String(Math.floor(sec)).padStart(2, '0'), S.x, S.y + 16, az ? C.yellow : C.ink, 15, 'left', 500);
       label('CHERNOBYL · UNIT 4 · RBMK-1000', S.x, S.y + 34, rgba(C.ink, .5), 10.5);
       // power trace (MWt), chart top = 3200 nominal
-      const cx0 = S.x, cw = S.w, cy0 = S.y + 70, ch = S.h * .24, X = s => cx0 + s / 50 * cw, Y = P => cy0 + ch - Math.min(P, 3200) / 3200 * ch;
+      const nar = S.w < 560, cx0 = S.x, cw = S.w, cy0 = S.y + 70, ch = S.h * (nar ? .17 : .24), X = s => cx0 + s / 50 * cw, Y = P => cy0 + ch - Math.min(P, 3200) / 3200 * ch;
       g.strokeStyle = rgba(C.green, 1); g.lineWidth = 1; g.strokeRect(cx0, cy0, cw, ch);
       g.beginPath(); for (const P of [800, 1600, 2400]) { g.moveTo(cx0, Y(P)); g.lineTo(cx0 + cw, Y(P)); } g.stroke();
       label('3200 MWt nominal', cx0 + 6, cy0 + 13, rgba(C.ink, .5), 10.5);
@@ -581,7 +590,7 @@ footer {
       for (let s = 0; s <= sec; s += .1) { const x = X(s), y = Y(P(s)); s ? g.lineTo(x, y) : g.moveTo(x, y); if (P(s) > 3200) break; }
       g.stroke();
       g.setLineDash([3, 4]); g.strokeStyle = rgba(C.blueHot, .8); g.beginPath(); g.moveTo(X(40), cy0); g.lineTo(X(40), cy0 + ch); g.stroke(); g.setLineDash([]);
-      label('AZ-5  01:23:40', X(40) + 6, cy0 + ch - 8, C.blueHot, 10.5);
+      label('AZ-5  01:23:40', X(40) - 6, cy0 + ch - 8, C.blueHot, 10.5, 'right');
       label('01:23:04 test begins', X(4) + 4, cy0 + ch + 16, rgba(C.ink, .5), 10.5);
       if (P(sec) > 3200) label('OFF SCALE', X(Math.min(sec, 48)) - 4, cy0 - 8, C.yellow, 12, 'right', 500);
       // the meter that could not say more
@@ -601,18 +610,18 @@ footer {
       label('R/h', gx, gy - gr * .35, rgba(C.ink, .55), 11, 'center');
       label(pinned ? '3.6 · FULL SCALE' : this.needle.toFixed(2), gx, gy - 14, pinned ? C.yellow : C.ink, 16, 'center', 500);
       // the field it could not show: log scale
-      const bx = S.x + S.w * .82, bTop = S.y + S.h * .42, bBot = S.y + S.h * .95, lo = -2, hi = 5;
+      const bx = S.x + S.w * .82, bTop = S.y + S.h * (nar ? .56 : .42), bBot = S.y + S.h * .95, lo = -2, hi = 5;
       const LY = v => bBot - (v - lo) / (hi - lo) * (bBot - bTop);
       g.strokeStyle = rgba(C.greenHi, .5); g.lineWidth = 1; g.beginPath(); g.moveTo(bx, bTop); g.lineTo(bx, bBot); g.stroke();
       for (let d = lo; d <= hi; d++) { g.beginPath(); g.moveTo(bx - 5, LY(d)); g.lineTo(bx + 5, LY(d)); g.stroke();
         label('10' + String(d).split('').map(c => SUP[c]).join(''), bx - 10, LY(d) + 4, rgba(C.ink, .5), 10.5, 'right'); }
       const fs = Math.log10(3.6);
       g.setLineDash([3, 3]); g.strokeStyle = C.yellow; g.beginPath(); g.moveTo(bx - 40, LY(fs)); g.lineTo(bx + 40, LY(fs)); g.stroke(); g.setLineDash([]);
-      label('meter limit 3.6', bx + 44, LY(fs) + 4, C.yellow, 10.5);
+      label('meter limit 3.6', nar ? bx - 44 : bx + 44, LY(fs) - (nar ? 6 : -4), C.yellow, 10.5, nar ? 'right' : 'left');
       const lv = sec < 43.5 ? -1.7 : -1.7 + seg(sec, 43.5, 48) * 5.9;
       g.fillStyle = rgba(C.blueHot, .9); g.fillRect(bx - 3, LY(lv), 6, bBot - LY(lv));
-      label('near-core estimates', bx + 12, LY(4) - 14, rgba(C.ink, .55), 10.5);
-      label('10³–10⁴ R/h', bx + 12, LY(4) + 2, C.blueHot, 11, 'left', 500);
+      label('near-core estimates', nar ? bx - 30 : bx + 12, LY(4) - 14, rgba(C.ink, .55), 10.5, nar ? 'right' : 'left');
+      label('10³–10⁴ R/h', nar ? bx - 30 : bx + 12, LY(4) + 2, C.blueHot, 11, nar ? 'right' : 'left', 500);
       // film flecks
       if (boom > 0 && !reduce) {
         g.fillStyle = 'rgba(240,246,242,0.9)';
@@ -639,7 +648,7 @@ footer {
       if (!this.dots) this.init();
       const yrs = p * 215, year = 1986.32 + yrs, D = this.dots;
       const now = (Date.now() - EVENT) / YEAR;
-      const top = S.y + 52, h = S.h - 120, w = S.w;
+      const top = S.y + 64, h = S.h - 132, w = S.w;
       let alive = 0;
       for (let i = 0; i < D.N; i++) {
         const x = S.x + D.x[i] * w, y = top + D.y[i] * h, td = D.td[i];
@@ -649,7 +658,9 @@ footer {
       }
       const expect = Math.pow(2, -yrs / TH);
       label(String(Math.floor(year)), S.x, S.y + 22, C.yellow, 24, 'left', 500);
-      label('¹³⁷Cs remaining  ' + (expect * 100).toFixed(2) + '% expected · ' + (alive / D.N * 100).toFixed(2) + '% in this sample of ' + D.N, S.x, S.y + 40, rgba(C.ink, .65), 10.5);
+      label('¹³⁷Cs remaining  ' + (expect * 100).toFixed(2) + '% expected', S.x, S.y + 40, rgba(C.ink, .65), 10.5);
+      const nr = S.w < 560;
+      label((alive / D.N * 100).toFixed(2) + '% in this sample of ' + D.N + ' nuclei', nr ? S.x : S.x + S.w, S.y + (nr ? 54 : 40), rgba(C.ink, .45), 10.5, nr ? 'left' : 'right');
       // time axis with today
       const ax = S.x, ay = S.y + S.h - 30, aw = S.w, X = yy => ax + yy / 215 * aw;
       g.strokeStyle = rgba(C.greenHi, .5); g.lineWidth = 1; g.beginPath(); g.moveTo(ax, ay); g.lineTo(ax + aw, ay);
