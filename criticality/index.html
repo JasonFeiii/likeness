@@ -316,8 +316,8 @@ footer {
       vec3 col = vec3(0.008, 0.018, 0.026);
       vec2 d = (uv - uFocus) * vec2(uRes.x / uRes.y, 1.0);
       float glow = exp(-dot(d, d) * 2.6) * uGlow;
-      col += uTint * (pow(n, 3.0) * 0.30 + glow * (0.18 + 0.5 * n));
-      col += vec3(0.02, 0.09, 0.06) * smoothstep(0.55, 1.0, n) * 0.6;
+      col += uTint * (pow(n, 3.0) * 0.13 + glow * (0.07 + 0.2 * n));
+      col += vec3(0.01, 0.07, 0.045) * smoothstep(0.55, 1.0, n) * 0.6;
       float h = hash(floor(gl_FragCoord.xy / 1.5) + floor(uT * 24.0) * vec2(7.0, 13.0));
       col += vec3(0.92, 0.96, 0.93) * step(1.0 - uDose * 0.05, h);
       col *= smoothstep(1.55, 0.25, length((uv - 0.5) * vec2(1.2, 1.0)));
@@ -351,8 +351,8 @@ footer {
     tint: 'blue', glow: 0.9,
     draw(S, p, t) {
       const wide = W >= 820;
-      const cx = wide ? W * 0.66 : W * 0.5, cy = wide ? H * 0.40 : H * 0.30;
-      const R = Math.min(wide ? H * 0.068 : W * 0.074, 62) * (1 + p * 0.5);
+      const cx = wide ? W * 0.68 : W * 0.5, cy = wide ? H * 0.36 : H * 0.27;
+      const R = Math.min(wide ? H * 0.05 : W * 0.06, 46) * (1 + p * 0.5);
       const k = reduce ? 1 : seg(t - T0, 0.2, 3.2);
       g.save(); g.globalAlpha = 1 - 0.8 * p; g.translate(cx, cy);
       // construction: circles R, 1.5R, 5R and the six blade edges, as on a drawing board
@@ -749,7 +749,7 @@ footer {
     look.glow += (sc.glow - look.glow) * Math.min(1, dt * 2);
     if (idx !== 4) look.dose *= Math.pow(0.02, dt);
     if (prog) {
-      const fx = idx === 0 ? (W >= 820 ? .66 : .5) : (S.x + S.w / 2) / W, fy = idx === 0 ? (W >= 820 ? .6 : .7) : 1 - (S.y + S.h / 2) / H;
+      const fx = idx === 0 ? (W >= 820 ? .68 : .5) : (S.x + S.w / 2) / W, fy = idx === 0 ? (W >= 820 ? .64 : .73) : 1 - (S.y + S.h / 2) / H;
       gl.uniform2f(U.uRes, fc.width, fc.height); gl.uniform1f(U.uT, reduce ? 0 : t);
       gl.uniform3f(U.uTint, look.tint[0], look.tint[1], look.tint[2]); gl.uniform1f(U.uGlow, look.glow);
       gl.uniform1f(U.uDose, reduce ? 0 : look.dose); gl.uniform2f(U.uFocus, fx, fy);
