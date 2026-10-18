@@ -730,7 +730,7 @@ footer {
   let active = -1, enterT = 0, last = performance.now(), kT = 0;
   addEventListener('resize', size); size();
   function loop(now) {
-    const t = now / 1000, dt = Math.min(.05, (now - last) / 1000); last = now;
+    const t = now / 1000, dt = Math.min(.2, (now - last) / 1000); last = now;   // tolerate slow or throttled frames
     const { idx, p } = scrollState();
     if (idx !== active) {
       active = idx; enterT = t; look.dose = 0;
