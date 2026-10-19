@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="A full-screen fluid field that ripples under your finger.">
+<meta name="description" content="A fluid field that ripples under your finger, or wherever you look.">
 <title>Undertow Field</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,6 +34,7 @@
   --r: 14px;
 }
 
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 /* fingers drive the field instead of panning or zooming the page */
 html, body, #flow { touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -232,6 +233,47 @@ footer {
   opacity: .35; transition: opacity .6s;
 }
 .dock:hover, .dock:focus-within, body.awake .dock { opacity: 1; }
+.eyes {
+  position: fixed; z-index: 3;
+  left: max(18px, env(safe-area-inset-left, 0px));
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  opacity: .55; transition: opacity .6s;
+  max-width: calc(100% - 180px);
+}
+.eyes:hover, .eyes:focus-within, body.awake .eyes, body.gazing .eyes { opacity: 1; }
+.eyes button {
+  appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(6, 8, 11, 0.45); color: var(--fg);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  font: 500 12px/1 var(--mono); letter-spacing: .06em;
+}
+.eyes button:hover { background: rgba(6, 8, 11, 0.7); }
+.eyes button svg { width: 16px; height: 16px; }
+.eyes .msg { font: 400 12px/1.4 var(--mono); color: var(--fg-dim); padding: 6px 10px; border-radius: 10px; background: rgba(6, 8, 11, 0.45); }
+.calib {
+  position: fixed; inset: 0; z-index: 5;
+  background: rgba(3, 5, 7, 0.55);
+  display: grid; justify-items: center; align-content: start; padding-top: 30vh; box-sizing: border-box; text-align: center;
+  font: 400 13px/1.6 var(--mono); color: var(--fg-dim);
+}
+.calib p { margin: 0; max-width: 34ch; padding: 0 16px; }
+.calib b { color: var(--fg); font-weight: 500; }
+.calib .dot {
+  position: fixed; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 22%, rgba(255,255,255,.25) 23% 60%, transparent 61%);
+  box-shadow: 0 0 24px rgba(255,255,255,.35);
+  transition: left .35s ease, top .35s ease, transform .2s;
+}
+.calib .dot.hit { transform: scale(.55); }
+.gaze {
+  position: fixed; z-index: 2; left: 0; top: 0; width: 64px; height: 64px; margin: -32px 0 0 -32px;
+  border-radius: 50%; border: 1px solid rgba(255,255,255,.22);
+  box-shadow: inset 0 0 18px rgba(255,255,255,.06);
+  pointer-events: none; will-change: transform;
+}
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
@@ -241,6 +283,14 @@ footer {
 
 
 <canvas id="flow" aria-hidden="true"></canvas>
+<div class="eyes" id="eyes">
+  <button type="button" id="eyeBtn"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2.1" fill="currentColor"/></svg><span id="eyeLabel">Stir with your eyes</span></button>
+  <button type="button" id="eyeRecal" hidden>Recalibrate</button>
+  <span class="msg" id="eyeMsg" hidden></span>
+</div>
+<div class="gaze" id="gaze" hidden></div>
+<div class="calib" id="calib" hidden><p id="calibText"><b>Follow the dot with your eyes.</b><br>Keep your head still. Nine points, about fifteen seconds.</p><div class="dot" id="calibDot"></div></div>
+
 <div class="dock" role="group" aria-label="Palette">
   <button class="swatch" data-p="abyss" aria-pressed="true" aria-label="Abyss palette"></button>
   <button class="swatch" data-p="ember" aria-pressed="false" aria-label="Ember palette"></button>
@@ -452,15 +502,16 @@ footer {
   }
   // the wake: drag a chain of small bumps along the path, stronger when moving fast
   const lastP = { x: null, y: null };
-  function wake(x, y, strong) {
-    if (lastP.x === null) { lastP.x = x; lastP.y = y; return; }
-    const dx = x - lastP.x, dy = y - lastP.y, d = Math.hypot(dx, dy);
+  function stroke(st, x, y, strength, radius) {
+    if (st.x === null) { st.x = x; st.y = y; return; }
+    const dx = x - st.x, dy = y - st.y, d = Math.hypot(dx, dy);
     if (d < 0.5) return;
     const n = Math.min(28, Math.ceil(d / (CELL * 1.2)));
-    const amp = Math.min(2.2, 0.3 + d * 0.05) * (strong ? 1 : 0.5) / Math.sqrt(n);
-    for (let i = 1; i <= n; i++) splat(lastP.x + dx * i / n, lastP.y + dy * i / n, strong ? 15 : 11, amp);
-    lastP.x = x; lastP.y = y;
+    const amp = Math.min(2.2, 0.3 + d * 0.05) * strength / Math.sqrt(n);
+    for (let i = 1; i <= n; i++) splat(st.x + dx * i / n, st.y + dy * i / n, radius, amp);
+    st.x = x; st.y = y;
   }
+  function wake(x, y, strong) { stroke(lastP, x, y, strong ? 1 : 0.5, strong ? 15 : 11); }
 
   // render below native res: the field is soft, so 0.6x looks identical and is far cheaper
   const SCALE = 0.6;
@@ -498,6 +549,221 @@ footer {
   window.addEventListener('pointerleave', () => { if (!touching) { mouse.tamt = 0; lastP.x = null; } });
   document.addEventListener('mouseleave', () => { mouse.tamt = 0; });
 
+
+  /* ---------- Eyes: face mesh + iris, a 9-point calibration, then gaze stirs the water ---------- */
+  const MODEL_BASE = '../models/';
+  const $ = id => document.getElementById(id);
+  const gaze = { on: false, ready: false, ok: false, sx: innerWidth / 2, sy: innerHeight / 2, rx: 0, ry: 0, st: { x: null, y: null }, lastDrop: 0, wasClosed: false, closedFor: 0, err: 0 };
+  let tfReady = null, detector = null, mesher = null, irisNet = null, stream = null, busy = false, roi = null, model = null, calib = null;
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
+  const mk = n => { const c = document.createElement('canvas'); c.width = c.height = n; return [c, c.getContext('2d', { willReadFrequently: true })]; };
+  const [detC, detX] = mk(128), [cropC, cropX] = mk(192), [eyeC, eyeX] = mk(64);
+  const ANCH = (() => { const a = []; for (const [st, n] of [[8, 2], [16, 6]]) { const f = 128 / st; for (let y = 0; y < f; y++) for (let x = 0; x < f; x++) for (let k = 0; k < n; k++) a.push([(x + .5) / f, (y + .5) / f]); } return a; })();
+  const say = t => { $('eyeMsg').textContent = t; $('eyeMsg').hidden = !t; };
+
+  function loadScript(src) { return new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => rej(new Error('script')); document.head.appendChild(el); }); }
+  async function loadModels() {
+    if (!window.tf) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+    try { await tf.setBackend('webgl'); } catch (e) {}
+    await tf.ready();
+    const packed = async u => { const r = await fetch(u); if (!r.ok) throw new Error('model'); const j = await r.json();
+      const bin = atob(j.weightData), b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      return tf.loadGraphModel(tf.io.fromMemory({ format: j.format, modelTopology: j.modelTopology, weightSpecs: j.weightSpecs, weightData: b.buffer, signature: j.signature })); };
+    [detector, mesher, irisNet] = await Promise.all(['facemesh-detection-short', 'facemesh', 'iris'].map(n => packed(MODEL_BASE + n + '.packed.json')));
+    tf.tidy(() => { detector.execute(tf.zeros([1, 128, 128, 3])); mesher.execute(tf.zeros([1, 192, 192, 3]), ['Identity_2', 'Identity_1']); irisNet.execute(tf.zeros([1, 64, 64, 3])); });
+  }
+  async function detect(sw, sh) {
+    const sc = 128 / Math.max(sw, sh), dw = sw * sc, dh = sh * sc, ox = (128 - dw) / 2, oy = (128 - dh) / 2;
+    detX.fillStyle = '#000'; detX.fillRect(0, 0, 128, 128); detX.drawImage(video, ox, oy, dw, dh);
+    const out = tf.tidy(() => detector.execute(tf.browser.fromPixels(detC).toFloat().div(127.5).sub(1).expandDims(0)));
+    const d = await out.data(); out.dispose();
+    let best = -1, bs = -1e9; for (let i = 0; i < 896; i++) if (d[i * 17] > bs) { bs = d[i * 17]; best = i; }
+    if (1 / (1 + Math.exp(-bs)) < 0.55) return null;
+    const r = i => d[best * 17 + 1 + i], [ax, ay] = ANCH[best], toS = (u, v) => [(u * 128 - ox) / sc, (v * 128 - oy) / sc];
+    const [cx, cy] = toS(r(0) / 128 + ax, r(1) / 128 + ay), eR = toS(r(4) / 128 + ax, r(5) / 128 + ay), eL = toS(r(6) / 128 + ax, r(7) / 128 + ay);
+    return { cx, cy, size: Math.max(r(2), r(3)) / sc * 1.5, ang: Math.atan2(eL[1] - eR[1], eL[0] - eR[0]) };
+  }
+  // draw a rotated square of the video into a canvas: crop pixel u ↔ video c + R(ang)·(u − n/2)·sc
+  function crop(ctx, n, cx, cy, size, ang, flip) {
+    const sc = size / n;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, n, n);
+    ctx.translate(n / 2, n / 2); if (flip) ctx.scale(-1, 1); ctx.rotate(-ang); ctx.scale(1 / sc, 1 / sc); ctx.translate(-cx, -cy);
+    ctx.drawImage(video, 0, 0); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return sc;
+  }
+  async function runMesh(r) {
+    const sc = crop(cropX, 192, r.cx, r.cy, r.size, r.ang, false);
+    const outs = tf.tidy(() => mesher.execute(tf.browser.fromPixels(cropC).toFloat().div(255).expandDims(0), ['Identity_2', 'Identity_1']));
+    const [m, f] = await Promise.all(outs.map(t => t.data())); outs.forEach(t => t.dispose());
+    const c = Math.cos(r.ang), sn = Math.sin(r.ang), pts = new Float32Array(1404);
+    for (let i = 0; i < 468; i++) { const u = (m[i*3] - 96) * sc, v = (m[i*3+1] - 96) * sc; pts[i*3] = r.cx + c * u - sn * v; pts[i*3+1] = r.cy + sn * u + c * v; pts[i*3+2] = m[i*3+2] * sc; }
+    return { pts, flag: f[0] };
+  }
+  // iris centre for one eye; the subject's left eye is mirrored into the right-eye pose the model expects
+  async function runIris(pts, a, b, flip) {
+    const ax = pts[a*3], ay = pts[a*3+1], bx = pts[b*3], by = pts[b*3+1];
+    const cx = (ax + bx) / 2, cy = (ay + by) / 2, ang = Math.atan2(by - ay, bx - ax);
+    const size = Math.hypot(bx - ax, by - ay) * 2.3;
+    const sc = crop(eyeX, 64, cx, cy, size, ang, flip);
+    const out = tf.tidy(() => irisNet.execute(tf.browser.fromPixels(eyeC).toFloat().div(255).expandDims(0)));
+    const o = await out.data(); out.dispose();
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    let u = (o[213] - 32) * sc, v = (o[214] - 32) * sc; if (flip) u = -u;
+    return [cx + c * u - sn * v, cy + sn * u + c * v];
+  }
+  const P2 = (pts, i) => [pts[i*3], pts[i*3+1]];
+  // eye-in-head features: iris offset along and across each eye, eyelid height, plus head pose and position
+  function features(pts, irR, irL, vw, vh) {
+    const eye = (iris, A, B, top, bot) => {
+      const a = P2(pts, A), b = P2(pts, B), t = P2(pts, top), bt = P2(pts, bot);
+      const w = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / w, uy = (b[1] - a[1]) / w, vx = -uy, vy = ux;
+      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+      return { ex: ((iris[0] - mx) * ux + (iris[1] - my) * uy) / w, ey: ((iris[0] - mx) * vx + (iris[1] - my) * vy) / w,
+               lid: ((t[0] - mx) * vx + (t[1] - my) * vy) / w, open: Math.hypot(t[0] - bt[0], t[1] - bt[1]) / w };
+    };
+    const R = eye(irR, 33, 133, 159, 145), L = eye(irL, 362, 263, 386, 374);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (let i = 0; i < 468; i++) { x0 = Math.min(x0, pts[i*3]); x1 = Math.max(x1, pts[i*3]); y0 = Math.min(y0, pts[i*3+1]); y1 = Math.max(y1, pts[i*3+1]); }
+    const fw = x1 - x0 || 1, nose = P2(pts, 1), chin = P2(pts, 152), emy = (irR[1] + irL[1]) / 2;
+    const ex = (R.ex + L.ex) / 2, ey = (R.ey + L.ey) / 2, lid = (R.lid + L.lid) / 2;
+    const hx = (nose[0] - (x0 + x1) / 2) / fw, hy = (nose[1] - emy) / ((chin[1] - emy) || 1);
+    const tx = (x0 + x1) / 2 / vw, ty = (y0 + y1) / 2 / vh;
+    return { f: [ex, ey, lid, hx, hy, tx, ty, ex * ey, ex * ex, ey * ey, fw / vw], open: (R.open + L.open) / 2 };
+  }
+
+  async function track() {
+    if (!gaze.on || busy || video.readyState < 2) return null;
+    busy = true;
+    try {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!roi) { roi = await detect(vw, vh); if (!roi) { gaze.ok = false; return null; } }
+      const r = await runMesh(roi);
+      if (r.flag < 0.5) { roi = null; gaze.ok = false; return null; }
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let i = 0; i < 468; i++) { x0 = Math.min(x0, r.pts[i*3]); x1 = Math.max(x1, r.pts[i*3]); y0 = Math.min(y0, r.pts[i*3+1]); y1 = Math.max(y1, r.pts[i*3+1]); }
+      roi = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, size: Math.max(x1 - x0, y1 - y0) * 1.55, ang: Math.atan2(r.pts[263*3+1] - r.pts[33*3+1], r.pts[263*3] - r.pts[33*3]) };
+      const irR = await runIris(r.pts, 33, 133, false), irL = await runIris(r.pts, 362, 263, true);
+      const ft = features(r.pts, irR, irL, vw, vh);
+      gaze.ok = true;
+      return ft;
+    } finally { busy = false; }
+  }
+
+  // ridge regression on standardised features (one model per screen axis)
+  function fitAxis(X, Y, lam) {
+    const d = X[0].length, A = Array.from({ length: d }, () => new Float64Array(d + 1));
+    for (let i = 0; i < X.length; i++) { const x = X[i]; for (let j = 0; j < d; j++) { A[j][d] += x[j] * Y[i]; for (let k = 0; k < d; k++) A[j][k] += x[j] * x[k]; } }
+    for (let j = 1; j < d; j++) A[j][j] += lam;
+    for (let c = 0; c < d; c++) {
+      let pv = c; for (let r = c + 1; r < d; r++) if (Math.abs(A[r][c]) > Math.abs(A[pv][c])) pv = r;
+      [A[c], A[pv]] = [A[pv], A[c]];
+      const v = A[c][c] || 1e-9; for (let k = c; k <= d; k++) A[c][k] /= v;
+      for (let r = 0; r < d; r++) if (r !== c) { const f = A[r][c]; if (f) for (let k = c; k <= d; k++) A[r][k] -= f * A[c][k]; }
+    }
+    return A.map(r => r[d]);
+  }
+  function fit(samples) {
+    const n = samples.length, d = samples[0].f.length, mean = new Array(d).fill(0), sd = new Array(d).fill(0);
+    for (const s of samples) s.f.forEach((v, j) => mean[j] += v / n);
+    for (const s of samples) s.f.forEach((v, j) => sd[j] += (v - mean[j]) ** 2 / n);
+    for (let j = 0; j < d; j++) sd[j] = Math.sqrt(sd[j]) || 1;
+    const X = samples.map(s => [1, ...s.f.map((v, j) => (v - mean[j]) / sd[j])]);
+    const wx = fitAxis(X, samples.map(s => s.x), 1.5), wy = fitAxis(X, samples.map(s => s.y), 1.5);
+    const m = { mean, sd, wx, wy };
+    let err = 0; for (const s of samples) { const [px, py] = predict(m, s.f); err += Math.hypot(px - s.x, py - s.y) / n; }
+    m.err = err; return m;
+  }
+  function predict(m, f) {
+    let x = m.wx[0], y = m.wy[0];
+    for (let j = 0; j < f.length; j++) { const z = (f[j] - m.mean[j]) / m.sd[j]; x += m.wx[j + 1] * z; y += m.wy[j + 1] * z; }
+    return [x, y];
+  }
+
+  const CAL = [[.5, .5], [.1, .12], [.5, .12], [.9, .12], [.9, .5], [.9, .88], [.5, .88], [.1, .88], [.1, .5]];
+  function startCalibration() {
+    calib = { i: -1, t0: 0, samples: [] };
+    model = null; $('gaze').hidden = true; $('calib').hidden = false; $('calibText').hidden = false;
+    nextCalPoint(performance.now() + 1600);
+  }
+  function nextCalPoint(at) {
+    calib.i++; calib.t0 = at;
+    const dot = $('calibDot');
+    if (calib.i >= CAL.length) { finishCalibration(); return; }
+    const [u, v] = CAL[calib.i];
+    dot.classList.remove('hit'); dot.style.left = (u * innerWidth) + 'px'; dot.style.top = (v * innerHeight) + 'px';
+  }
+  function finishCalibration() {
+    $('calib').hidden = true;
+    if (calib.samples.length < 30) { say('Not enough clear looks. Face the camera in even light and press Recalibrate.'); $('eyeRecal').hidden = false; calib = null; return; }
+    model = fit(calib.samples); calib = null;
+    gaze.sx = innerWidth / 2; gaze.sy = innerHeight / 2; gaze.st.x = null;
+    $('gaze').hidden = false; $('eyeRecal').hidden = false;
+    say('Eyes tracked · about ±' + Math.round(model.err) + ' px. Look around; blink to drop a stone.');
+    setTimeout(() => { if (model) say(''); }, 6000);
+  }
+  function calibrationTick(now, ft) {
+    if (!calib || calib.i < 0 || calib.i >= CAL.length) return;
+    const el = now - calib.t0;
+    if (el < 0) return;
+    if (ft && el > 550 && ft.open > 0.16) { const [u, v] = CAL[calib.i]; calib.samples.push({ f: ft.f, x: u * innerWidth, y: v * innerHeight }); }
+    if (el > 600) $('calibText').hidden = true;
+    if (el > 1500) { $('calibDot').classList.add('hit'); splat(CAL[calib.i][0] * innerWidth, CAL[calib.i][1] * innerHeight, 22, -2.2); nextCalPoint(now + 250); }
+  }
+
+  async function startEyes() {
+    $('eyeBtn').disabled = true; say('Opening the camera…');
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('camera');
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+      video.srcObject = stream; await video.play();
+      say('Loading the face and iris models (about 6 MB)…');
+      if (!tfReady) tfReady = loadModels();
+      await tfReady;
+      gaze.on = true; document.body.classList.add('gazing');
+      $('eyeLabel').textContent = 'Stop'; $('eyeBtn').disabled = false; say('');
+      startCalibration();
+    } catch (e) {
+      console.error(e);
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      tfReady = (e && e.message === 'model') ? null : tfReady;
+      $('eyeBtn').disabled = false;
+      say(e && (e.message === 'script' || e.message === 'model') ? 'The models could not load. Check your connection and try again.'
+        : 'The camera stayed closed. Allow camera access in your browser, or open the public link if this is an embedded preview.');
+    }
+  }
+  function stopEyes() {
+    gaze.on = false; gaze.ok = false; model = null; calib = null; roi = null;
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    document.body.classList.remove('gazing');
+    $('gaze').hidden = true; $('calib').hidden = true; $('eyeRecal').hidden = true; $('eyeLabel').textContent = 'Stir with your eyes'; say('');
+  }
+  $('eyeBtn').addEventListener('click', () => gaze.on ? stopEyes() : startEyes());
+  $('eyeRecal').addEventListener('click', () => { if (gaze.on) { say(''); startCalibration(); } });
+
+  // called every frame: run the tracker, feed calibration, or turn gaze into water
+  let gazeFt = null;
+  function eyesFrame(now) {
+    if (!gaze.on) return;
+    track().then(ft => { if (ft) gazeFt = ft; });
+    const ft = gazeFt; gazeFt = null;
+    if (calib) { calibrationTick(now, ft); return; }
+    if (!model || !ft) return;
+    const closed = ft.open < 0.14;
+    if (closed) { gaze.closedFor++; gaze.wasClosed = true; return; }
+    if (gaze.wasClosed) {                       // a blink drops a stone where you were looking
+      if (gaze.closedFor < 12) splat(gaze.sx, gaze.sy, 34, -3.6);
+      gaze.wasClosed = false; gaze.closedFor = 0;
+    }
+    let [px, py] = predict(model, ft.f);
+    px = Math.max(0, Math.min(innerWidth, px)); py = Math.max(0, Math.min(innerHeight, py));
+    // jitter is small and saccades are big: follow fast only when the jump is real
+    const jump = Math.hypot(px - gaze.sx, py - gaze.sy), k = Math.max(0.07, Math.min(0.55, jump / 260));
+    gaze.sx += (px - gaze.sx) * k; gaze.sy += (py - gaze.sy) * k;
+    stroke(gaze.st, gaze.sx, gaze.sy, 0.42, 16);              // moving the eyes draws a wake
+    if (now - gaze.lastDrop > 160) { splat(gaze.sx, gaze.sy, 14, -0.45); gaze.lastDrop = now; }   // resting eyes keep stirring
+    $('gaze').style.transform = 'translate(' + gaze.sx.toFixed(1) + 'px,' + gaze.sy.toFixed(1) + 'px)';
+  }
+
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   let visible = true;
   document.addEventListener('visibilitychange', () => { visible = !document.hidden; if (visible) requestAnimationFrame(frame); });
@@ -527,6 +793,7 @@ footer {
     for (let k = 0; k < hCur.length; k++) { const v = 128 + hCur[k] * 60; hBytes[k] = v < 0 ? 0 : v > 255 ? 255 : v; }
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, RW, RH, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, hBytes);
     gl.uniform2f(U.uWaveTexel, 1 / RW, 1 / RH);
+    eyesFrame(now);
 
     resize();
     gl.uniform2f(U.uRes, canvas.width, canvas.height);
