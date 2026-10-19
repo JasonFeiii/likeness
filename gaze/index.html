@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A fluid field that ripples under your finger, or wherever you look.">
+<title>Undertow Gaze</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed fluid shader, wordmark top-left, one glass sign-in card centred, palette + CLI hint along the bottom edge.
+   Single deliberate dark look: the shader is the page, so colours are fixed rather than theme-switched. */
+:root {
+  color-scheme: dark;
+  --ink: #06080b;
+  --ink-2: #0d1218;
+  --glass: rgba(10, 14, 19, 0.52);
+  --glass-edge: rgba(214, 232, 230, 0.14);
+  --fg: #ecefe9;
+  --fg-dim: rgba(236, 239, 233, 0.62);
+  --fg-faint: rgba(236, 239, 233, 0.38);
+  --accent: #9fe0d8;
+  --accent-ink: #062320;
+  --field: rgba(255, 255, 255, 0.05);
+  --field-edge: rgba(236, 239, 233, 0.16);
+  --ok: #9fe0d8;
+
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "Geist", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --r: 14px;
+}
+
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+/* fingers drive the field instead of panning or zooming the page */
+html, body, #flow { touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+body {
+  background: var(--ink);
+  color: var(--fg);
+  font: 15px/1.5 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+#flow {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  z-index: 0;
+  background:
+    radial-gradient(120% 80% at 20% 30%, #0f4a4f 0%, transparent 60%),
+    radial-gradient(90% 70% at 80% 70%, #1a2a3d 0%, transparent 60%),
+    var(--ink);
+}
+/* soft vignette so the card always reads */
+.veil {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(70% 60% at 50% 50%, rgba(6,8,11,0.0) 0%, rgba(6,8,11,0.45) 100%);
+}
+
+.shell {
+  position: relative; z-index: 2;
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 24px;
+  padding-block: 22px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+
+header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  max-width: 1200px; width: 100%; margin: 0 auto;
+}
+.mark {
+  display: flex; align-items: center; gap: 10px;
+  font: 700 19px/1 var(--display);
+  letter-spacing: -0.01em;
+}
+.mark svg { width: 26px; height: 26px; }
+.status {
+  font: 500 12px/1 var(--mono);
+  color: var(--fg-dim);
+  display: flex; align-items: center; gap: 8px;
+  letter-spacing: 0.02em;
+}
+.status i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 10px var(--ok);
+}
+
+main { display: grid; place-items: center; }
+
+.card {
+  width: 100%; max-width: 400px;
+  box-sizing: border-box;
+  padding: 32px 28px 26px;
+  border-radius: 22px;
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7);
+  display: grid; gap: 22px;
+}
+.card h1 {
+  margin: 0;
+  font: 700 clamp(30px, 6vw, 38px)/1.02 var(--display);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.card .lede { margin: 8px 0 0; color: var(--fg-dim); max-width: 34ch; }
+
+.tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  padding: 4px; border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--field-edge);
+}
+.tabs button {
+  appearance: none; border: 0; cursor: pointer;
+  padding: 9px 8px; border-radius: 9px;
+  font: 500 13px/1 var(--body);
+  color: var(--fg-dim); background: transparent;
+  transition: background .2s, color .2s;
+}
+.tabs button[aria-selected="true"] { background: rgba(255,255,255,0.1); color: var(--fg); }
+
+form { display: grid; gap: 14px; margin: 0; }
+label { display: grid; gap: 7px; font: 500 12px/1 var(--body); color: var(--fg-dim); letter-spacing: 0.04em; text-transform: uppercase; }
+input {
+  appearance: none;
+  width: 100%; box-sizing: border-box;
+  padding: 13px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--field-edge);
+  background: var(--field);
+  color: var(--fg);
+  font: 400 15px/1.2 var(--body);
+  text-transform: none; letter-spacing: 0;
+  transition: border-color .2s, background .2s;
+}
+input::placeholder { color: var(--fg-faint); }
+input:focus { outline: none; border-color: var(--accent); background: rgba(255,255,255,0.08); }
+
+.primary {
+  appearance: none; border: 0; cursor: pointer;
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--accent); color: var(--accent-ink);
+  font: 600 15px/1 var(--body);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .15s, filter .2s;
+}
+.primary:hover { filter: brightness(1.06); }
+.primary:active { transform: translateY(1px); }
+button:focus-visible, a:focus-visible, .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.code {
+  display: grid; gap: 12px; text-align: center;
+}
+.code .digits {
+  font: 500 clamp(26px, 7vw, 32px)/1 var(--mono);
+  letter-spacing: 0.14em;
+  padding: 18px 10px;
+  border-radius: 12px;
+  border: 1px dashed var(--field-edge);
+  background: var(--field);
+  user-select: all;
+}
+.code p { margin: 0; color: var(--fg-dim); font-size: 14px; }
+.code kbd {
+  font: 400 13px/1 var(--mono); color: var(--fg);
+  padding: 3px 6px; border-radius: 6px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--field-edge);
+}
+.timer { font: 400 12px/1 var(--mono); color: var(--fg-faint); font-variant-numeric: tabular-nums; }
+
+.note {
+  margin: 0; padding: 11px 13px;
+  border-radius: 10px;
+  font-size: 13px; line-height: 1.45;
+  color: var(--fg);
+  background: rgba(159, 224, 216, 0.1);
+  border: 1px solid rgba(159, 224, 216, 0.28);
+}
+
+.fine { margin: 0; font-size: 12.5px; color: var(--fg-faint); }
+.fine a { color: var(--fg-dim); }
+
+footer {
+  max-width: 1200px; width: 100%; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.cli {
+  font: 400 12.5px/1.3 var(--mono);
+  color: var(--fg-dim);
+  min-width: 0;
+}
+.cli b { color: var(--accent); font-weight: 500; }
+
+.palette { display: flex; align-items: center; gap: 10px; }
+.palette span { font: 500 11px/1 var(--mono); color: var(--fg-faint); letter-spacing: 0.08em; text-transform: uppercase; }
+.swatch {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.25);
+  cursor: pointer; padding: 0;
+  transition: transform .2s;
+}
+.swatch[aria-pressed="true"] { transform: scale(1.18); border-color: var(--fg); }
+.swatch[data-p="abyss"]   { background: conic-gradient(#0b3a41, #5fc4ba, #e3efe6, #0b3a41); }
+.swatch[data-p="ember"]   { background: conic-gradient(#2a120b, #d5683a, #f3d9b8, #2a120b); }
+.swatch[data-p="glacier"] { background: conic-gradient(#1b2236, #8aa6e0, #f2f4f8, #1b2236); }
+
+@media (max-width: 440px) {
+  .card { padding: 26px 20px 22px; border-radius: 18px; }
+  .status { display: none; }
+}
+.dock {
+  position: fixed; z-index: 2;
+  right: max(18px, env(safe-area-inset-right, 0px));
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 10px; padding: 8px 10px; border-radius: 999px;
+  background: rgba(6, 8, 11, 0.35); border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  opacity: .35; transition: opacity .6s;
+}
+.dock:hover, .dock:focus-within, body.awake .dock { opacity: 1; }
+.eyes {
+  position: fixed; z-index: 3;
+  left: max(18px, env(safe-area-inset-left, 0px));
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  opacity: .55; transition: opacity .6s;
+  max-width: calc(100% - 180px);
+}
+.eyes:hover, .eyes:focus-within, body.awake .eyes, body.gazing .eyes { opacity: 1; }
+.eyes button {
+  appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(6, 8, 11, 0.45); color: var(--fg);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  font: 500 12px/1 var(--mono); letter-spacing: .06em;
+}
+.eyes button:hover { background: rgba(6, 8, 11, 0.7); }
+.eyes button svg { width: 16px; height: 16px; }
+.eyes .msg { font: 400 12px/1.4 var(--mono); color: var(--fg-dim); padding: 6px 10px; border-radius: 10px; background: rgba(6, 8, 11, 0.45); }
+.calib {
+  position: fixed; inset: 0; z-index: 5;
+  background: rgba(3, 5, 7, 0.55);
+  display: grid; justify-items: center; align-content: start; padding-top: 30vh; box-sizing: border-box; text-align: center;
+  font: 400 13px/1.6 var(--mono); color: var(--fg-dim);
+}
+.calib p { margin: 0; max-width: 34ch; padding: 0 16px; }
+.calib b { color: var(--fg); font-weight: 500; }
+.calib .dot {
+  position: fixed; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 22%, rgba(255,255,255,.25) 23% 60%, transparent 61%);
+  box-shadow: 0 0 24px rgba(255,255,255,.35);
+  transition: left .35s ease, top .35s ease, transform .2s;
+}
+.calib .dot.hit { transform: scale(.55); }
+.gaze {
+  position: fixed; z-index: 2; left: 0; top: 0; width: 64px; height: 64px; margin: -32px 0 0 -32px;
+  border-radius: 50%; border: 1px solid rgba(255,255,255,.22);
+  box-shadow: inset 0 0 18px rgba(255,255,255,.06);
+  pointer-events: none; will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+
+<canvas id="flow" aria-hidden="true"></canvas>
+<div class="eyes" id="eyes">
+  <button type="button" id="eyeBtn"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2.1" fill="currentColor"/></svg><span id="eyeLabel">Stir with your eyes</span></button>
+  <button type="button" id="eyeRecal" hidden>Recalibrate</button>
+  <span class="msg" id="eyeMsg" hidden></span>
+</div>
+<div class="gaze" id="gaze" hidden></div>
+<div class="calib" id="calib" hidden><p id="calibText"><b>Follow the dot with your eyes.</b><br>Keep your head still. Nine points, about fifteen seconds.</p><div class="dot" id="calibDot"></div></div>
+
+<div class="dock" role="group" aria-label="Palette">
+  <button class="swatch" data-p="abyss" aria-pressed="true" aria-label="Abyss palette"></button>
+  <button class="swatch" data-p="ember" aria-pressed="false" aria-label="Ember palette"></button>
+  <button class="swatch" data-p="glacier" aria-pressed="false" aria-label="Glacier palette"></button>
+</div>
+
+<script>
+(() => {
+  // the palette dock wakes when the pointer moves, then fades back
+  let sleepT = 0;
+  addEventListener('pointermove', () => { document.body.classList.add('awake'); clearTimeout(sleepT); sleepT = setTimeout(() => document.body.classList.remove('awake'), 1800); }, { passive: true });
+
+  /* ---------- Palettes ---------- */
+  const PALETTES = {
+    abyss:   { a: [0.024,0.035,0.047], b: [0.04,0.23,0.25], c: [0.37,0.77,0.73], d: [0.89,0.94,0.90], accent: '#9fe0d8', ink: '#062320' },
+    ember:   { a: [0.035,0.024,0.02],  b: [0.20,0.07,0.04], c: [0.84,0.41,0.23], d: [0.95,0.85,0.72], accent: '#f0a57c', ink: '#2a0f05' },
+    glacier: { a: [0.03,0.035,0.06],   b: [0.10,0.13,0.23], c: [0.54,0.65,0.88], d: [0.95,0.96,0.97], accent: '#b3c7f2', ink: '#0d1630' }
+  };
+  let current = PALETTES.abyss;
+  let target = PALETTES.abyss;
+  const live = { a: [...current.a], b: [...current.b], c: [...current.c], d: [...current.d] };
+
+  document.querySelectorAll('.swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.swatch').forEach(b => b.setAttribute('aria-pressed', b === btn));
+      target = PALETTES[btn.dataset.p];
+      document.documentElement.style.setProperty('--accent', target.accent);
+      document.documentElement.style.setProperty('--accent-ink', target.ink);
+      document.documentElement.style.setProperty('--ok', target.accent);
+      try { localStorage.setItem('undertow-palette', btn.dataset.p); } catch (e) {}
+    });
+  });
+  try {
+    const saved = localStorage.getItem('undertow-palette');
+    if (saved && PALETTES[saved]) document.querySelector('.swatch[data-p="' + saved + '"]').click();
+  } catch (e) {}
+
+  /* ---------- Shader ---------- */
+  const canvas = document.getElementById('flow');
+  const gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false });
+  if (!gl) return; // CSS gradient fallback on the canvas stays visible
+
+  const vert = `
+    attribute vec2 p;
+    void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
+
+  const frag = `
+    precision highp float;
+    uniform vec2  uRes;
+    uniform float uTime;
+    uniform vec2  uMouse;
+    uniform float uMouseAmt;
+    uniform vec3  uA, uB, uC, uD;
+    uniform sampler2D uWave;   // water surface height, 0.5 = rest
+    uniform vec2  uWaveTexel;
+
+    // simplex noise (Ashima / Ian McEwan, MIT)
+    vec3 permute(vec3 x){ return mod(((x*34.0)+1.0)*x, 289.0); }
+    float snoise(vec2 v){
+      const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+      vec2 i  = floor(v + dot(v, C.yy));
+      vec2 x0 = v - i + dot(i, C.xx);
+      vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+      vec4 x12 = x0.xyxy + C.xxzz;
+      x12.xy -= i1;
+      i = mod(i, 289.0);
+      vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+      vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+      m = m*m; m = m*m;
+      vec3 x = 2.0 * fract(p * C.www) - 1.0;
+      vec3 h = abs(x) - 0.5;
+      vec3 ox = floor(x + 0.5);
+      vec3 a0 = x - ox;
+      m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+      vec3 g;
+      g.x  = a0.x  * x0.x  + h.x  * x0.y;
+      g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+      return 130.0 * dot(m, g);
+    }
+
+    float fbm(vec2 p){
+      float v = 0.0, a = 0.5;
+      mat2 r = mat2(0.8, -0.6, 0.6, 0.8);
+      for (int i = 0; i < 5; i++){
+        v += a * snoise(p);
+        p = r * p * 2.02 + 3.7;
+        a *= 0.5;
+      }
+      return v;
+    }
+
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    float wh(vec2 st){ return texture2D(uWave, st).r - 0.5; }
+
+    void main(){
+      vec2 uv = gl_FragCoord.xy / uRes;
+      vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
+      p *= 1.15;
+      float t = uTime * 0.045;
+
+      // the moving water surface: its slope bends what we see underneath (refraction)
+      vec2 st = vec2(uv.x, 1.0 - uv.y);
+      float hC = wh(st);
+      float hx = wh(st + vec2(uWaveTexel.x, 0.0)) - wh(st - vec2(uWaveTexel.x, 0.0));
+      float hy = wh(st + vec2(0.0, uWaveTexel.y)) - wh(st - vec2(0.0, uWaveTexel.y));
+      vec2 grad = vec2(hx, -hy);
+      grad *= smoothstep(0.006, 0.03, length(grad));    // ignore 8-bit residue so calm water stays calm
+      hC *= smoothstep(0.004, 0.02, abs(hC));
+      p += grad * 2.2;
+
+      // mouse: a soft lens that pushes the field around the cursor
+      vec2 m = (uMouse - 0.5 * uRes) / min(uRes.x, uRes.y) * 1.15;
+      vec2 dm = p - m;
+      float fall = exp(-dot(dm, dm) * 6.0) * uMouseAmt;
+      p += dm / (length(dm) + 0.08) * fall * 0.06;   // soft centre, no starburst under the finger
+
+      // domain warping: q warps r, r warps the final sample
+      vec2 q = vec2(fbm(p + vec2(0.0, t)),
+                    fbm(p + vec2(5.2, 1.3) - t * 0.7));
+      vec2 r = vec2(fbm(p + 1.8 * q + vec2(1.7, 9.2) + t * 0.9),
+                    fbm(p + 1.8 * q + vec2(8.3, 2.8) - t * 0.6));
+      float f = fbm(p + 2.2 * r);
+
+      float n = clamp(0.5 + 0.5 * f, 0.0, 1.0);
+      vec3 col = mix(uA, uB, smoothstep(0.15, 0.62, n));
+      col = mix(col, uC, smoothstep(0.45, 0.95, length(q) * 0.9 + 0.25 * r.x));
+      // thin bright ribbons where the warp folds over itself
+      float ribbon = smoothstep(0.55, 1.0, abs(r.y) * 1.25) * smoothstep(0.35, 0.9, n);
+      col = mix(col, uD, ribbon * 0.55);
+      col += uC * fall * 0.08;
+
+      // light on the water: crests catch a little colour, slopes throw a specular glint
+      vec3 nrm = normalize(vec3(-grad * 12.0, 1.0));
+      vec3 L = normalize(vec3(-0.45, 0.6, 0.75));
+      float spec = pow(max(dot(reflect(-L, nrm), vec3(0.0, 0.0, 1.0)), 0.0), 28.0);
+      float diff = dot(nrm, L) - dot(vec3(0.0, 0.0, 1.0), L);       // light and shade on the wave faces
+      col *= 1.0 + diff * 1.15;
+      col += uD * spec * 1.1;
+      col += uC * clamp(hC, -0.3, 0.3) * 0.5;
+
+      // vignette + darker lower edge so UI chrome stays legible
+      float vig = smoothstep(1.25, 0.25, length((uv - 0.5) * vec2(1.1, 1.0)));
+      col *= mix(0.55, 1.0, vig);
+
+      // film grain (also kills gradient banding)
+      col += (hash(gl_FragCoord.xy + fract(uTime) * 91.0) - 0.5) * 0.035;
+
+      gl_FragColor = vec4(col, 1.0);
+    }`;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; }
+    return s;
+  }
+  const vs = compile(gl.VERTEX_SHADER, vert), fs = compile(gl.FRAGMENT_SHADER, frag);
+  if (!vs || !fs) return;
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return; }
+  gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+  const U = {};
+  ['uRes','uTime','uMouse','uMouseAmt','uA','uB','uC','uD','uWave','uWaveTexel'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  const wtex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wtex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.uniform1i(U.uWave, 0);
+
+  /* ---------- Water surface: heightfield wave equation on the CPU ---------- */
+  const CELL = 5;                       // CSS px per cell
+  let RW = 0, RH = 0, hPrev, hCur, hBytes;
+  function waveSize() {
+    const w = Math.max(8, Math.ceil(innerWidth / CELL)), h = Math.max(8, Math.ceil(innerHeight / CELL));
+    if (w === RW && h === RH) return;
+    RW = w; RH = h; hPrev = new Float32Array(RW * RH); hCur = new Float32Array(RW * RH); hBytes = new Uint8Array(RW * RH).fill(128);
+  }
+  waveSize(); window.addEventListener('resize', waveSize);
+  // a smooth bump (cosine profile) added to the surface; negative pushes the water down
+  function splat(cx, cy, radius, amp) {
+    const gx = cx / CELL, gy = cy / CELL, r = Math.max(1.5, radius / CELL), r2 = r * r;
+    const x0 = Math.max(1, Math.floor(gx - r)), x1 = Math.min(RW - 2, Math.ceil(gx + r));
+    const y0 = Math.max(1, Math.floor(gy - r)), y1 = Math.min(RH - 2, Math.ceil(gy + r));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const d2 = (x - gx) * (x - gx) + (y - gy) * (y - gy);
+      if (d2 < r2) hCur[y * RW + x] += amp * (0.5 + 0.5 * Math.cos(Math.PI * Math.sqrt(d2 / r2)));
+    }
+  }
+  // one step of the discrete wave equation; the previous buffer is overwritten with the next state
+  function waveStep() {
+    const damp = 0.984;
+    for (let y = 1; y < RH - 1; y++) {
+      const row = y * RW;
+      for (let x = 1; x < RW - 1; x++) { const k = row + x; hPrev[k] = ((hCur[k - 1] + hCur[k + 1] + hCur[k - RW] + hCur[k + RW]) * 0.5 - hPrev[k]) * damp; }
+    }
+    const tmp = hPrev; hPrev = hCur; hCur = tmp;
+  }
+  // the wake: drag a chain of small bumps along the path, stronger when moving fast
+  const lastP = { x: null, y: null };
+  function stroke(st, x, y, strength, radius) {
+    if (st.x === null) { st.x = x; st.y = y; return; }
+    const dx = x - st.x, dy = y - st.y, d = Math.hypot(dx, dy);
+    if (d < 0.5) return;
+    const n = Math.min(28, Math.ceil(d / (CELL * 1.2)));
+    const amp = Math.min(2.2, 0.3 + d * 0.05) * strength / Math.sqrt(n);
+    for (let i = 1; i <= n; i++) splat(st.x + dx * i / n, st.y + dy * i / n, radius, amp);
+    st.x = x; st.y = y;
+  }
+  function wake(x, y, strong) { stroke(lastP, x, y, strong ? 1 : 0.5, strong ? 15 : 11); }
+
+  // render below native res: the field is soft, so 0.6x looks identical and is far cheaper
+  const SCALE = 0.6;
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.floor(canvas.clientWidth * dpr * SCALE));
+    const h = Math.max(1, Math.floor(canvas.clientHeight * dpr * SCALE));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const mouse = { x: canvas.width * 0.5, y: canvas.height * 0.5, tx: canvas.width * 0.5, ty: canvas.height * 0.5, amt: 0, tamt: 0 };
+  function onMove(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    mouse.tx = (clientX - r.left) / r.width * canvas.width;
+    mouse.ty = (1 - (clientY - r.top) / r.height) * canvas.height;
+    mouse.tamt = 1;
+  }
+  let touching = false;
+  window.addEventListener('pointermove', e => { onMove(e.clientX, e.clientY); wake(e.clientX, e.clientY, e.pointerType !== 'mouse' || e.buttons > 0); }, { passive: true });
+  window.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse') { touching = true; mouse.x = mouse.tx; mouse.y = mouse.ty; }
+    onMove(e.clientX, e.clientY);
+    if (e.pointerType !== 'mouse') { mouse.x = mouse.tx; mouse.y = mouse.ty; }   // a new touch starts where the finger lands
+    lastP.x = e.clientX; lastP.y = e.clientY;
+    splat(e.clientX, e.clientY, 26, -2.6);                                       // the touch itself presses a dimple into the water
+  }, { passive: true });
+  const release = e => { touching = false; if (!e || e.pointerType !== 'mouse') lastP.x = null; };
+  window.addEventListener('pointerup', release, { passive: true });
+  window.addEventListener('pointercancel', release, { passive: true });
+  // fallback for browsers that still pan on pointer events
+  window.addEventListener('touchmove', e => { if (!window.PointerEvent) { const t = e.touches[0]; if (t) { touching = true; onMove(t.clientX, t.clientY); wake(t.clientX, t.clientY, true); } } e.preventDefault(); }, { passive: false });
+  window.addEventListener('touchend', release, { passive: true });
+  window.addEventListener('pointerleave', () => { if (!touching) { mouse.tamt = 0; lastP.x = null; } });
+  document.addEventListener('mouseleave', () => { mouse.tamt = 0; });
+
+
+  /* ---------- Eyes: face mesh + iris, a 9-point calibration, then gaze stirs the water ---------- */
+  const MODEL_BASE = '../models/';
+  const $ = id => document.getElementById(id);
+  const gaze = { on: false, ready: false, ok: false, sx: innerWidth / 2, sy: innerHeight / 2, rx: 0, ry: 0, st: { x: null, y: null }, lastDrop: 0, wasClosed: false, closedFor: 0, err: 0 };
+  let tfReady = null, detector = null, mesher = null, irisNet = null, stream = null, busy = false, roi = null, model = null, calib = null;
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
+  const mk = n => { const c = document.createElement('canvas'); c.width = c.height = n; return [c, c.getContext('2d', { willReadFrequently: true })]; };
+  const [detC, detX] = mk(128), [cropC, cropX] = mk(192), [eyeC, eyeX] = mk(64);
+  const ANCH = (() => { const a = []; for (const [st, n] of [[8, 2], [16, 6]]) { const f = 128 / st; for (let y = 0; y < f; y++) for (let x = 0; x < f; x++) for (let k = 0; k < n; k++) a.push([(x + .5) / f, (y + .5) / f]); } return a; })();
+  const say = t => { $('eyeMsg').textContent = t; $('eyeMsg').hidden = !t; };
+
+  function loadScript(src) { return new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => rej(new Error('script')); document.head.appendChild(el); }); }
+  async function loadModels() {
+    if (!window.tf) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+    try { await tf.setBackend('webgl'); } catch (e) {}
+    await tf.ready();
+    const packed = async u => { const r = await fetch(u); if (!r.ok) throw new Error('model'); const j = await r.json();
+      const bin = atob(j.weightData), b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      return tf.loadGraphModel(tf.io.fromMemory({ format: j.format, modelTopology: j.modelTopology, weightSpecs: j.weightSpecs, weightData: b.buffer, signature: j.signature })); };
+    [detector, mesher, irisNet] = await Promise.all(['facemesh-detection-short', 'facemesh', 'iris'].map(n => packed(MODEL_BASE + n + '.packed.json')));
+    tf.tidy(() => { detector.execute(tf.zeros([1, 128, 128, 3])); mesher.execute(tf.zeros([1, 192, 192, 3]), ['Identity_2', 'Identity_1']); irisNet.execute(tf.zeros([1, 64, 64, 3])); });
+  }
+  async function detect(sw, sh) {
+    const sc = 128 / Math.max(sw, sh), dw = sw * sc, dh = sh * sc, ox = (128 - dw) / 2, oy = (128 - dh) / 2;
+    detX.fillStyle = '#000'; detX.fillRect(0, 0, 128, 128); detX.drawImage(video, ox, oy, dw, dh);
+    const out = tf.tidy(() => detector.execute(tf.browser.fromPixels(detC).toFloat().div(127.5).sub(1).expandDims(0)));
+    const d = await out.data(); out.dispose();
+    let best = -1, bs = -1e9; for (let i = 0; i < 896; i++) if (d[i * 17] > bs) { bs = d[i * 17]; best = i; }
+    if (1 / (1 + Math.exp(-bs)) < 0.55) return null;
+    const r = i => d[best * 17 + 1 + i], [ax, ay] = ANCH[best], toS = (u, v) => [(u * 128 - ox) / sc, (v * 128 - oy) / sc];
+    const [cx, cy] = toS(r(0) / 128 + ax, r(1) / 128 + ay), eR = toS(r(4) / 128 + ax, r(5) / 128 + ay), eL = toS(r(6) / 128 + ax, r(7) / 128 + ay);
+    return { cx, cy, size: Math.max(r(2), r(3)) / sc * 1.5, ang: Math.atan2(eL[1] - eR[1], eL[0] - eR[0]) };
+  }
+  // draw a rotated square of the video into a canvas: crop pixel u ↔ video c + R(ang)·(u − n/2)·sc
+  function crop(ctx, n, cx, cy, size, ang, flip) {
+    const sc = size / n;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, n, n);
+    ctx.translate(n / 2, n / 2); if (flip) ctx.scale(-1, 1); ctx.rotate(-ang); ctx.scale(1 / sc, 1 / sc); ctx.translate(-cx, -cy);
+    ctx.drawImage(video, 0, 0); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return sc;
+  }
+  async function runMesh(r) {
+    const sc = crop(cropX, 192, r.cx, r.cy, r.size, r.ang, false);
+    const outs = tf.tidy(() => mesher.execute(tf.browser.fromPixels(cropC).toFloat().div(255).expandDims(0), ['Identity_2', 'Identity_1']));
+    const [m, f] = await Promise.all(outs.map(t => t.data())); outs.forEach(t => t.dispose());
+    const c = Math.cos(r.ang), sn = Math.sin(r.ang), pts = new Float32Array(1404);
+    for (let i = 0; i < 468; i++) { const u = (m[i*3] - 96) * sc, v = (m[i*3+1] - 96) * sc; pts[i*3] = r.cx + c * u - sn * v; pts[i*3+1] = r.cy + sn * u + c * v; pts[i*3+2] = m[i*3+2] * sc; }
+    return { pts, flag: f[0] };
+  }
+  // iris centre for one eye; the subject's left eye is mirrored into the right-eye pose the model expects
+  async function runIris(pts, a, b, flip) {
+    const ax = pts[a*3], ay = pts[a*3+1], bx = pts[b*3], by = pts[b*3+1];
+    const cx = (ax + bx) / 2, cy = (ay + by) / 2, ang = Math.atan2(by - ay, bx - ax);
+    const size = Math.hypot(bx - ax, by - ay) * 2.3;
+    const sc = crop(eyeX, 64, cx, cy, size, ang, flip);
+    const out = tf.tidy(() => irisNet.execute(tf.browser.fromPixels(eyeC).toFloat().div(255).expandDims(0)));
+    const o = await out.data(); out.dispose();
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    let u = (o[213] - 32) * sc, v = (o[214] - 32) * sc; if (flip) u = -u;
+    return [cx + c * u - sn * v, cy + sn * u + c * v];
+  }
+  const P2 = (pts, i) => [pts[i*3], pts[i*3+1]];
+  // eye-in-head features: iris offset along and across each eye, eyelid height, plus head pose and position
+  function features(pts, irR, irL, vw, vh) {
+    const eye = (iris, A, B, top, bot) => {
+      const a = P2(pts, A), b = P2(pts, B), t = P2(pts, top), bt = P2(pts, bot);
+      const w = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / w, uy = (b[1] - a[1]) / w, vx = -uy, vy = ux;
+      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+      return { ex: ((iris[0] - mx) * ux + (iris[1] - my) * uy) / w, ey: ((iris[0] - mx) * vx + (iris[1] - my) * vy) / w,
+               lid: ((t[0] - mx) * vx + (t[1] - my) * vy) / w, open: Math.hypot(t[0] - bt[0], t[1] - bt[1]) / w };
+    };
+    const R = eye(irR, 33, 133, 159, 145), L = eye(irL, 362, 263, 386, 374);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (let i = 0; i < 468; i++) { x0 = Math.min(x0, pts[i*3]); x1 = Math.max(x1, pts[i*3]); y0 = Math.min(y0, pts[i*3+1]); y1 = Math.max(y1, pts[i*3+1]); }
+    const fw = x1 - x0 || 1, nose = P2(pts, 1), chin = P2(pts, 152), emy = (irR[1] + irL[1]) / 2;
+    const ex = (R.ex + L.ex) / 2, ey = (R.ey + L.ey) / 2, lid = (R.lid + L.lid) / 2;
+    const hx = (nose[0] - (x0 + x1) / 2) / fw, hy = (nose[1] - emy) / ((chin[1] - emy) || 1);
+    const tx = (x0 + x1) / 2 / vw, ty = (y0 + y1) / 2 / vh;
+    return { f: [ex, ey, lid, hx, hy, tx, ty, ex * ey, ex * ex, ey * ey, fw / vw], open: (R.open + L.open) / 2 };
+  }
+
+  async function track() {
+    if (!gaze.on || busy || video.readyState < 2) return null;
+    busy = true;
+    try {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!roi) { roi = await detect(vw, vh); if (!roi) { gaze.ok = false; return null; } }
+      const r = await runMesh(roi);
+      if (r.flag < 0.5) { roi = null; gaze.ok = false; return null; }
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let i = 0; i < 468; i++) { x0 = Math.min(x0, r.pts[i*3]); x1 = Math.max(x1, r.pts[i*3]); y0 = Math.min(y0, r.pts[i*3+1]); y1 = Math.max(y1, r.pts[i*3+1]); }
+      roi = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, size: Math.max(x1 - x0, y1 - y0) * 1.55, ang: Math.atan2(r.pts[263*3+1] - r.pts[33*3+1], r.pts[263*3] - r.pts[33*3]) };
+      const irR = await runIris(r.pts, 33, 133, false), irL = await runIris(r.pts, 362, 263, true);
+      const ft = features(r.pts, irR, irL, vw, vh);
+      gaze.ok = true;
+      return ft;
+    } finally { busy = false; }
+  }
+
+  // ridge regression on standardised features (one model per screen axis)
+  function fitAxis(X, Y, lam) {
+    const d = X[0].length, A = Array.from({ length: d }, () => new Float64Array(d + 1));
+    for (let i = 0; i < X.length; i++) { const x = X[i]; for (let j = 0; j < d; j++) { A[j][d] += x[j] * Y[i]; for (let k = 0; k < d; k++) A[j][k] += x[j] * x[k]; } }
+    for (let j = 1; j < d; j++) A[j][j] += lam;
+    for (let c = 0; c < d; c++) {
+      let pv = c; for (let r = c + 1; r < d; r++) if (Math.abs(A[r][c]) > Math.abs(A[pv][c])) pv = r;
+      [A[c], A[pv]] = [A[pv], A[c]];
+      const v = A[c][c] || 1e-9; for (let k = c; k <= d; k++) A[c][k] /= v;
+      for (let r = 0; r < d; r++) if (r !== c) { const f = A[r][c]; if (f) for (let k = c; k <= d; k++) A[r][k] -= f * A[c][k]; }
+    }
+    return A.map(r => r[d]);
+  }
+  function fit(samples) {
+    const n = samples.length, d = samples[0].f.length, mean = new Array(d).fill(0), sd = new Array(d).fill(0);
+    for (const s of samples) s.f.forEach((v, j) => mean[j] += v / n);
+    for (const s of samples) s.f.forEach((v, j) => sd[j] += (v - mean[j]) ** 2 / n);
+    for (let j = 0; j < d; j++) sd[j] = Math.sqrt(sd[j]) || 1;
+    const X = samples.map(s => [1, ...s.f.map((v, j) => (v - mean[j]) / sd[j])]);
+    const wx = fitAxis(X, samples.map(s => s.x), 1.5), wy = fitAxis(X, samples.map(s => s.y), 1.5);
+    const m = { mean, sd, wx, wy };
+    let err = 0; for (const s of samples) { const [px, py] = predict(m, s.f); err += Math.hypot(px - s.x, py - s.y) / n; }
+    m.err = err; return m;
+  }
+  function predict(m, f) {
+    let x = m.wx[0], y = m.wy[0];
+    for (let j = 0; j < f.length; j++) { const z = (f[j] - m.mean[j]) / m.sd[j]; x += m.wx[j + 1] * z; y += m.wy[j + 1] * z; }
+    return [x, y];
+  }
+
+  const CAL = [[.5, .5], [.1, .12], [.5, .12], [.9, .12], [.9, .5], [.9, .88], [.5, .88], [.1, .88], [.1, .5]];
+  function startCalibration() {
+    calib = { i: -1, t0: 0, samples: [] };
+    model = null; $('gaze').hidden = true; $('calib').hidden = false; $('calibText').hidden = false;
+    nextCalPoint(performance.now() + 1600);
+  }
+  function nextCalPoint(at) {
+    calib.i++; calib.t0 = at;
+    const dot = $('calibDot');
+    if (calib.i >= CAL.length) { finishCalibration(); return; }
+    const [u, v] = CAL[calib.i];
+    dot.classList.remove('hit'); dot.style.left = (u * innerWidth) + 'px'; dot.style.top = (v * innerHeight) + 'px';
+  }
+  function finishCalibration() {
+    $('calib').hidden = true;
+    if (calib.samples.length < 30) { say('Not enough clear looks. Face the camera in even light and press Recalibrate.'); $('eyeRecal').hidden = false; calib = null; return; }
+    model = fit(calib.samples); calib = null;
+    gaze.sx = innerWidth / 2; gaze.sy = innerHeight / 2; gaze.st.x = null;
+    $('gaze').hidden = false; $('eyeRecal').hidden = false;
+    say('Eyes tracked · about ±' + Math.round(model.err) + ' px. Look around; blink to drop a stone.');
+    setTimeout(() => { if (model) say(''); }, 6000);
+  }
+  function calibrationTick(now, ft) {
+    if (!calib || calib.i < 0 || calib.i >= CAL.length) return;
+    const el = now - calib.t0;
+    if (el < 0) return;
+    if (ft && el > 550 && ft.open > 0.16) { const [u, v] = CAL[calib.i]; calib.samples.push({ f: ft.f, x: u * innerWidth, y: v * innerHeight }); }
+    if (el > 600) $('calibText').hidden = true;
+    if (el > 1500) { $('calibDot').classList.add('hit'); splat(CAL[calib.i][0] * innerWidth, CAL[calib.i][1] * innerHeight, 22, -2.2); nextCalPoint(now + 250); }
+  }
+
+  async function startEyes() {
+    $('eyeBtn').disabled = true; say('Opening the camera…');
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('camera');
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+      video.srcObject = stream; await video.play();
+      say('Loading the face and iris models (about 6 MB)…');
+      if (!tfReady) tfReady = loadModels();
+      await tfReady;
+      gaze.on = true; document.body.classList.add('gazing');
+      $('eyeLabel').textContent = 'Stop'; $('eyeBtn').disabled = false; say('');
+      startCalibration();
+    } catch (e) {
+      console.error(e);
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      tfReady = (e && e.message === 'model') ? null : tfReady;
+      $('eyeBtn').disabled = false;
+      say(e && (e.message === 'script' || e.message === 'model') ? 'The models could not load. Check your connection and try again.'
+        : 'The camera stayed closed. Allow camera access in your browser, or open the public link if this is an embedded preview.');
+    }
+  }
+  function stopEyes() {
+    gaze.on = false; gaze.ok = false; model = null; calib = null; roi = null;
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    document.body.classList.remove('gazing');
+    $('gaze').hidden = true; $('calib').hidden = true; $('eyeRecal').hidden = true; $('eyeLabel').textContent = 'Stir with your eyes'; say('');
+  }
+  $('eyeBtn').addEventListener('click', () => gaze.on ? stopEyes() : startEyes());
+  $('eyeRecal').addEventListener('click', () => { if (gaze.on) { say(''); startCalibration(); } });
+
+  // called every frame: run the tracker, feed calibration, or turn gaze into water
+  let gazeFt = null;
+  function eyesFrame(now) {
+    if (!gaze.on) return;
+    track().then(ft => { if (ft) gazeFt = ft; });
+    const ft = gazeFt; gazeFt = null;
+    if (calib) { calibrationTick(now, ft); return; }
+    if (!model || !ft) return;
+    const closed = ft.open < 0.14;
+    if (closed) { gaze.closedFor++; gaze.wasClosed = true; return; }
+    if (gaze.wasClosed) {                       // a blink drops a stone where you were looking
+      if (gaze.closedFor < 12) splat(gaze.sx, gaze.sy, 34, -3.6);
+      gaze.wasClosed = false; gaze.closedFor = 0;
+    }
+    let [px, py] = predict(model, ft.f);
+    px = Math.max(0, Math.min(innerWidth, px)); py = Math.max(0, Math.min(innerHeight, py));
+    // jitter is small and saccades are big: follow fast only when the jump is real
+    const jump = Math.hypot(px - gaze.sx, py - gaze.sy), k = Math.max(0.07, Math.min(0.55, jump / 260));
+    gaze.sx += (px - gaze.sx) * k; gaze.sy += (py - gaze.sy) * k;
+    stroke(gaze.st, gaze.sx, gaze.sy, 0.42, 16);              // moving the eyes draws a wake
+    if (now - gaze.lastDrop > 160) { splat(gaze.sx, gaze.sy, 14, -0.45); gaze.lastDrop = now; }   // resting eyes keep stirring
+    $('gaze').style.transform = 'translate(' + gaze.sx.toFixed(1) + 'px,' + gaze.sy.toFixed(1) + 'px)';
+  }
+
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let visible = true;
+  document.addEventListener('visibilitychange', () => { visible = !document.hidden; if (visible) requestAnimationFrame(frame); });
+
+  const t0 = performance.now();
+  const seed = Math.random() * 100;
+  let last = 0, waveAcc = 0, nextDrop = performance.now() + 1500;
+  function frame(now) {
+    if (!visible) return;
+    // reduced motion: draw near-still frames at a crawl
+    const speed = reduce.matches ? 0.08 : 1;
+    const t = seed + (now - t0) / 1000 * speed;
+
+    // ease mouse and palette
+    const follow = touching ? 0.18 : 0.06;           // a finger needs a tighter follow than a mouse
+    mouse.x += (mouse.tx - mouse.x) * follow;
+    mouse.y += (mouse.ty - mouse.y) * follow;
+    mouse.amt += (mouse.tamt - mouse.amt) * 0.04;
+    if (touching) mouse.tamt = 1; else mouse.tamt *= 0.985; // a held finger keeps the lens open; otherwise it relaxes
+    for (const k of ['a','b','c','d']) for (let i = 0; i < 3; i++) live[k][i] += (target[k][i] - live[k][i]) * 0.04;
+
+    // water: fixed 60 Hz steps, plus the odd stray drop so the surface is never quite still
+    waveAcc += Math.min(0.1, (now - (last || now)) / 1000);
+    let steps = 0;
+    while (waveAcc > 1 / 60 && steps < 3) { waveStep(); waveAcc -= 1 / 60; steps++; }
+    if (!reduce.matches && now > nextDrop) { splat(Math.random() * innerWidth, Math.random() * innerHeight, 9, -0.9); nextDrop = now + 2200 + Math.random() * 3800; }
+    for (let k = 0; k < hCur.length; k++) { const v = 128 + hCur[k] * 60; hBytes[k] = v < 0 ? 0 : v > 255 ? 255 : v; }
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, RW, RH, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, hBytes);
+    gl.uniform2f(U.uWaveTexel, 1 / RW, 1 / RH);
+    eyesFrame(now);
+
+    resize();
+    gl.uniform2f(U.uRes, canvas.width, canvas.height);
+    gl.uniform1f(U.uTime, t);
+    gl.uniform2f(U.uMouse, mouse.x, mouse.y);
+    gl.uniform1f(U.uMouseAmt, reduce.matches ? 0 : mouse.amt);
+    gl.uniform3fv(U.uA, live.a); gl.uniform3fv(U.uB, live.b);
+    gl.uniform3fv(U.uC, live.c); gl.uniform3fv(U.uD, live.d);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    if (reduce.matches) {
+      // ~5 fps is plenty for a near-static field
+      setTimeout(() => requestAnimationFrame(frame), 200);
+    } else {
+      requestAnimationFrame(frame);
+    }
+    last = now;
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
