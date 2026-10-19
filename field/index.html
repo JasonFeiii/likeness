@@ -35,6 +35,8 @@
 }
 
 html, body { height: 100%; }
+/* fingers drive the field instead of panning or zooming the page */
+html, body, #flow { touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 body {
   background: var(--ink);
   color: var(--fg);
@@ -340,7 +342,7 @@ footer {
       vec2 m = (uMouse - 0.5 * uRes) / min(uRes.x, uRes.y) * 1.15;
       vec2 dm = p - m;
       float fall = exp(-dot(dm, dm) * 6.0) * uMouseAmt;
-      p += normalize(dm + 1e-4) * fall * 0.12;
+      p += dm / (length(dm) + 0.08) * fall * 0.12;   // soft centre, no starburst under the finger
 
       // domain warping: q warps r, r warps the final sample
       vec2 q = vec2(fbm(p + vec2(0.0, t)),
@@ -408,8 +410,20 @@ footer {
     mouse.ty = (1 - (clientY - r.top) / r.height) * canvas.height;
     mouse.tamt = 1;
   }
+  let touching = false;
   window.addEventListener('pointermove', e => onMove(e.clientX, e.clientY), { passive: true });
-  window.addEventListener('pointerleave', () => { mouse.tamt = 0; });
+  window.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse') { touching = true; mouse.x = mouse.tx; mouse.y = mouse.ty; }
+    onMove(e.clientX, e.clientY);
+    if (e.pointerType !== 'mouse') { mouse.x = mouse.tx; mouse.y = mouse.ty; }   // a new touch starts where the finger lands
+  }, { passive: true });
+  const release = () => { touching = false; };
+  window.addEventListener('pointerup', release, { passive: true });
+  window.addEventListener('pointercancel', release, { passive: true });
+  // fallback for browsers that still pan on pointer events
+  window.addEventListener('touchmove', e => { const t = e.touches[0]; if (t) { touching = true; onMove(t.clientX, t.clientY); } e.preventDefault(); }, { passive: false });
+  window.addEventListener('touchend', release, { passive: true });
+  window.addEventListener('pointerleave', () => { if (!touching) mouse.tamt = 0; });
   document.addEventListener('mouseleave', () => { mouse.tamt = 0; });
 
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -426,10 +440,11 @@ footer {
     const t = seed + (now - t0) / 1000 * speed;
 
     // ease mouse and palette
-    mouse.x += (mouse.tx - mouse.x) * 0.06;
-    mouse.y += (mouse.ty - mouse.y) * 0.06;
+    const follow = touching ? 0.18 : 0.06;           // a finger needs a tighter follow than a mouse
+    mouse.x += (mouse.tx - mouse.x) * follow;
+    mouse.y += (mouse.ty - mouse.y) * follow;
     mouse.amt += (mouse.tamt - mouse.amt) * 0.04;
-    mouse.tamt *= 0.985; // lens relaxes when the pointer rests
+    if (touching) mouse.tamt = 1; else mouse.tamt *= 0.985; // a held finger keeps the lens open; otherwise it relaxes
     for (const k of ['a','b','c','d']) for (let i = 0; i < 3; i++) live[k][i] += (target[k][i] - live[k][i]) * 0.04;
 
     resize();
